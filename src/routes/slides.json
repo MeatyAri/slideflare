@@ -1,0 +1,26 @@
+[
+    {
+        "bgColor": "bg-blue-500",
+        "textColor": "text-white",
+        "title": "Introduction to JavaScript",
+        "content": "JavaScript is a versatile programming language used for web development."
+    },
+    {
+        "bgColor": "bg-green-500",
+        "textColor": "text-white",
+        "title": "Variables and Data Types",
+        "content": "JavaScript supports various data types including strings, numbers, and objects."
+    },
+    {
+        "bgColor": "bg-red-500",
+        "textColor": "text-white",
+        "title": "Functions",
+        "content": "Functions are reusable blocks of code that perform a specific task."
+    },
+    {
+        "bgColor": "bg-yellow-500",
+        "textColor": "text-black",
+        "title": "DOM Manipulation",
+        "content": "JavaScript can manipulate the Document Object Model (DOM) to change the content and structure of web pages."
+    }
+]
