@@ -1,0 +1,7 @@
+@import 'tailwindcss';
+
+@layer utilities {
+	html {
+		@apply bg-gray-100 dark:bg-gray-900 dark:text-amber-50;
+	}
+}
