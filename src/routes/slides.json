@@ -18,6 +18,84 @@
         "content": "Functions are reusable blocks of code that perform a specific task."
     },
     {
+        "bgColor": "bg-purple-500",
+        "textColor": "text-white",
+        "title": "Control Structures",
+        "content": "JavaScript uses control structures like loops and conditionals to control the flow of execution."
+    },
+    {
+        "bgColor": "bg-orange-500",
+        "textColor": "text-black",
+        "title": "Events",
+        "content": "JavaScript can respond to user interactions through events like clicks and key presses."
+    },
+    {
+        "bgColor": "bg-teal-500",
+        "textColor": "text-white",
+        "title": "Objects and Arrays",
+        "content": "JavaScript uses objects and arrays to store collections of data."
+    },
+    {
+        "bgColor": "bg-pink-500",
+        "textColor": "text-white",
+        "title": "Asynchronous JavaScript",
+        "content": "JavaScript supports asynchronous programming through callbacks, promises, and async/await."
+    },
+    {
+        "bgColor": "bg-indigo-500",
+        "textColor": "text-white",
+        "title": "Error Handling",
+        "content": "JavaScript provides mechanisms for handling errors using try/catch blocks."
+    },
+    {
+        "bgColor": "bg-gray-500",
+        "textColor": "text-white",
+        "title": "APIs and AJAX",
+        "content": "JavaScript can interact with APIs and perform asynchronous requests using AJAX."
+    },
+    {
+        "bgColor": "bg-yellow-500",
+        "textColor": "text-black",
+        "title": "ES6 Features",
+        "content": "JavaScript ES6 introduced new features like arrow functions, template literals, and destructuring."
+    },
+    {
+        "bgColor": "bg-blue-700",
+        "textColor": "text-white",
+        "title": "JavaScript Frameworks",
+        "content": "Popular JavaScript frameworks like React, Angular, and Vue.js help build complex applications."
+    },
+    {
+        "bgColor": "bg-green-700",
+        "textColor": "text-white",
+        "title": "Debugging and Testing",
+        "content": "JavaScript provides tools for debugging and testing code to ensure quality and performance."
+    },
+    {
+        "bgColor": "bg-red-700",
+        "textColor": "text-white",
+        "title": "JavaScript in the Browser",
+        "content": "JavaScript runs in the browser, allowing for dynamic and interactive web pages."
+    },
+    {
+        "bgColor": "bg-purple-700",
+        "textColor": "text-white",
+        "title": "JavaScript and the Server",
+        "content": "JavaScript can also run on the server using Node.js, enabling full-stack development."
+    },
+    {
+        "bgColor": "bg-orange-700",
+        "textColor": "text-black",
+        "title": "JavaScript and Databases",
+        "content": "JavaScript can interact with databases using libraries like Mongoose for MongoDB."
+    },
+    {
+        "bgColor": "bg-teal-700",
+        "textColor": "text-white",
+        "title": "JavaScript and Web APIs",
+        "content": "JavaScript can access web APIs to fetch data and perform operations on the web."
+    },
+    {
         "bgColor": "bg-yellow-500",
         "textColor": "text-black",
         "title": "DOM Manipulation",
