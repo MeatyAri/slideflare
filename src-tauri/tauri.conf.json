@@ -15,7 +15,8 @@
         "title": "slideflare",
         "width": 800,
         "height": 600,
-        "center": true
+        "center": true,
+        "dragDropEnabled": true
       }
     ],
     "security": {
