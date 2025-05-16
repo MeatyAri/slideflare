@@ -49,6 +49,8 @@
 	});
 
 	async function selectFile() {
+        error = '';
+
 		const selected = await open({
 			multiple: false,
 			filters: [
