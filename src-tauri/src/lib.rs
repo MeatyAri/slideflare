@@ -1,42 +1,20 @@
-use notify::{RecommendedWatcher, RecursiveMode, Watcher, EventKind};
 use std::path::PathBuf;
-use std::sync::mpsc::channel;
-use std::fs;
-use tauri::Emitter;
+
+use negahban::{Negahban, HookType, EventType};
 
 #[tauri::command]
-fn start_file_watcher(window: tauri::Window, file_path: String) {
-    // Spawn a new thread to handle file change events
-    std::thread::spawn(move || {
-        let path = PathBuf::from(file_path);
-        let (tx, rx) = channel();
-
-        // Initialize the file watcher
-        let mut watcher: RecommendedWatcher = Watcher::new(tx, notify::Config::default())
-            .expect("Failed to create watcher");
-
-        // Start watching the file
-        watcher
-            .watch(&path, RecursiveMode::NonRecursive)
-            .expect("Failed to watch file");
-        
-        for res in rx {
-            match res {
-                Ok(event) => {
-                    if matches!(event.kind, EventKind::Modify(notify::event::ModifyKind::Data(_))) {
-                        // Read the updated file content
-                        if let Ok(content) = fs::read_to_string(&path) {
-                            // Emit the content to the frontend
-                            window
-                                .emit("markdown-updated", content)
-                                .expect("Failed to emit event");
-                        }
-                    }
+fn start_file_watcher(file_path: String) {
+    let _ = Negahban{
+        path: PathBuf::from(file_path),
+        hook: HookType::IndefiniteHook(
+            Box::new(|event| {
+                if event.kind == EventType::Modify {
+                    println!("File modified: {:?}", event.paths);
                 }
-                Err(e) => eprintln!("Watch error: {:?}", e),
-            }
-        }
-    });
+            })
+        ),
+        ..Negahban::default() // sets rest of them to default
+    }.watch();
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
