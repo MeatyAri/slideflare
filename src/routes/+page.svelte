@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
 	import { webview } from '@tauri-apps/api';
+	import { listen } from '@tauri-apps/api/event';
 	import { open } from '@tauri-apps/plugin-dialog';
 
 	let dragActive = false;
@@ -10,9 +11,10 @@
 	async function handleFile(filePath: String) {
 		try {
 			// Invoke the Rust command with the file paths
-			const processedContents: string[] = await invoke('process_file', { path: filePath });
-			// Update your frontend state with the processed contents
-			console.log(processedContents);
+			await invoke('start_file_watcher', { filePath })
+				.then(() => console.log('File watcher started'))
+				.catch((error) => console.error('Failed to start file watcher:', error));
+			console.log(`Watching: ${filePath}`);
 		} catch (error) {
 			console.error('Error processing files:', error);
 		}
@@ -49,7 +51,7 @@
 	});
 
 	async function selectFile() {
-        error = '';
+		error = '';
 
 		const selected = await open({
 			multiple: false,
@@ -67,6 +69,12 @@
 			console.log('No file selected');
 		}
 	}
+
+	listen('markdown-updated', (event) => {
+		const markdownContent = event.payload;
+		// Update your frontend UI with the new markdown content
+		console.log('Markdown content updated:', markdownContent);
+	});
 </script>
 
 <div
