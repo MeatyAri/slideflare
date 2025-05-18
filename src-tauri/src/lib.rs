@@ -4,17 +4,19 @@ use negahban::{Negahban, HookType, EventType};
 
 #[tauri::command]
 fn start_file_watcher(file_path: String) {
-    let _ = Negahban{
-        path: PathBuf::from(file_path),
-        hook: HookType::IndefiniteHook(
-            Box::new(|event| {
-                if event.kind == EventType::Modify {
-                    println!("File modified: {:?}", event.paths);
-                }
-            })
-        ),
-        ..Negahban::default() // sets rest of them to default
-    }.watch();
+    tokio::spawn(async move {
+        let _ = Negahban{
+            path: PathBuf::from(file_path),
+            hook: HookType::IndefiniteHook(
+                Box::new(|event| {
+                    if event.kind == EventType::Modify {
+                        println!("File modified: {:?}", event.paths);
+                    }
+                })
+            ),
+            ..Negahban::default() // sets rest of them to default
+        }.watch();
+    });
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
