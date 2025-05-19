@@ -6,12 +6,11 @@
 
 # Testing:
 
-- fixed file watcher and termination logic
-
 # Later
 
 - add custom code component
 
 # Done
 
+- fixed file watcher and termination logic
 - on resize scroll to the active slide with no animation (to keep it persistent when changing resolution or window size)

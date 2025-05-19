@@ -1,19 +1,13 @@
+mod watcher;
+
 use std::path::PathBuf;
-use std::fs;
-use tauri::{Emitter, Listener};
 use std::ops::ControlFlow;
 use std::sync::{Arc, Mutex};
 
+use tauri::{Emitter, Listener};
 use negahban::{Negahban, HookType, EventType};
 
-fn send_new_file(window: &tauri::Window, file_path: &str) {
-    if let Ok(content) = fs::read_to_string(file_path) {
-        // Emit the content to the frontend
-        window
-            .emit("markdown-updated", content)
-            .expect("Failed to emit event");
-    }
-}
+use watcher::send_new_file;
 
 #[tauri::command]
 async fn start_file_watcher(window: tauri::Window, file_path: String) {

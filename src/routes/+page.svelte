@@ -11,10 +11,9 @@
 	async function handleFile(filePath: String) {
 		try {
 			// Invoke the Rust command with the file paths
-			await invoke('start_file_watcher', { filePath })
-				.then(() => console.log('File watcher started'))
-				.catch((error) => console.error('Failed to start file watcher:', error));
-			console.log(`Watching: ${filePath}`);
+			await invoke('start_file_watcher', { filePath }).catch((error) =>
+				console.error('Failed to start file watcher:', error)
+			);
 		} catch (error) {
 			console.error('Error processing files:', error);
 		}
@@ -97,18 +96,13 @@
 		}}
 	>
 		<div class="flex flex-col items-center space-y-2">
-			<svg
-				class="h-12 w-12 text-blue-400"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				viewBox="0 0 24 24"
-			>
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					d="M7 16V4a1 1 0 011-1h8a1 1 0 011 1v12m-5 4v-4m0 0l-3 3m3-3l3 3"
-				/>
+			<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24">
+				<g fill="none" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" d="M9 13h6M9 9h4m-4 8h4" /><path
+						d="M19 13v2c0 2.828 0 4.243-.879 5.121C17.243 21 15.828 21 13 21h-2c-2.828 0-4.243 0-5.121-.879C5 19.243 5 17.828 5 15V9c0-2.828 0-4.243.879-5.121C6.757 3 8.172 3 11 3"
+					/>
+					<path stroke-linecap="round" d="M18 3v6m3-3h-6" />
+				</g>
 			</svg>
 			<p class="font-semibold text-gray-300">Drag & drop a Markdown file here</p>
 			<p class="text-sm text-gray-400">
@@ -120,9 +114,9 @@
 		{/if}
 	</div>
 
-    <button class="p-4 bg-amber-400 cursor-pointer" onclick={() => {
+	<!-- <button class="p-4 bg-amber-400 cursor-pointer" onclick={() => {
         webview.getCurrentWebview().emit('terminate-event');
-    }}>terminate</button>
+    }}>terminate</button> -->
 
 	{#if markdownContent}
 		<div class="mt-8 w-full max-w-lg rounded bg-gray-800 p-4 shadow">
