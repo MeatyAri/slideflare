@@ -2,7 +2,6 @@ use std::fs;
 
 use tauri::Emitter;
 use twox_hash::XxHash64;
-use markdown::{to_html_with_options, Options};
 
 pub fn send_new_file(window: &tauri::Window, file_path: &str, last_hash: &std::sync::Arc<std::sync::Mutex<u64>>) {
     if let Ok(content) = fs::read_to_string(file_path) {
@@ -15,24 +14,21 @@ pub fn send_new_file(window: &tauri::Window, file_path: &str, last_hash: &std::s
         *last_hash_lock = hash;
 
         // parse the markdown content to HTML
-        // let options = Options {
-        //     parse: markdown::ParseOptions {
-        //         constructs: markdown::Constructs {
-        //             gfm: true,         // Enable GitHub Flavored Markdown
-        //             math: true,        // Enable math expressions
-        //             frontmatter: true, // Enable frontmatter (optional)
-        //             table: true,       // Enable tables (part of GFM)
-        //             tasklist: true,    // Enable task lists (part of GFM)
-        //             strikethrough: true, // Enable strikethrough (part of GFM)
-        //             ..markdown::Constructs::default()
-        //         },
-        //         ..markdown::ParseOptions::default()
-        //     },
-        //     ..Options::default()
-        // };
-        let res = to_html_with_options(
+        let options = markdown::Options {
+            parse: markdown::ParseOptions {
+                constructs: markdown::Constructs {
+                    frontmatter: true,
+                    math_flow: true,
+                    math_text: true,
+                    ..markdown::Constructs::gfm()
+                },
+                ..markdown::ParseOptions::default()
+            },
+            ..markdown::Options::default()
+        };
+        let res = markdown::to_html_with_options(
             &content,
-            &Options::gfm()
+            &options
         );
 
         if let Err(e) = res {

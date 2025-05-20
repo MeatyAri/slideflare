@@ -1,13 +1,13 @@
 # TODO:
 
 - add pulldown-cmark for markdown parsing
-    - enable all the extensions
+    - enable all the extensions (enabled gfm, math, frontmatter(yaml support))
     - add custom slides parsing
-- add [tailwindcss-typography](https://github.com/tailwindlabs/tailwindcss-typography) to style the html parsed from the markdown
 
 # Testing:
 
 - make sure same file won't get processed twice, used a non-cryptographic hash function
+- add [tailwindcss-typography](https://github.com/tailwindlabs/tailwindcss-typography) to style the html parsed from the markdown
 
 # Later
 

@@ -121,7 +121,7 @@
 	{#if markdownContent}
 		<div class="mt-8 w-full max-w-lg rounded bg-gray-800 p-4 shadow">
 			<h2 class="mb-2 text-lg font-bold text-gray-100">Markdown Content</h2>
-			<pre class="whitespace-pre-wrap text-gray-300">{markdownContent}</pre>
+			<article class="dark prose lg:prose-xl">{@html markdownContent}</article>
 		</div>
 	{/if}
 </div>
