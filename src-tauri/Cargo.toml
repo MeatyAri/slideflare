@@ -27,3 +27,4 @@ tokio = { version = "1", features = ["full"] }
 notify = "8.0.0"
 negahban = "0.3.1"
 twox-hash = "2"
+markdown = "1"

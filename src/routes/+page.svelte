@@ -4,9 +4,9 @@
 	import { listen } from '@tauri-apps/api/event';
 	import { open } from '@tauri-apps/plugin-dialog';
 
-	let dragActive = false;
-	let markdownContent = '';
-	let error = '';
+	let dragActive = $state(false);
+	let markdownContent = $state('');
+	let error = $state('');
 
 	async function handleFile(filePath: String) {
 		try {
@@ -70,7 +70,7 @@
 	}
 
 	listen('markdown-updated', (event) => {
-		const markdownContent = event.payload;
+		markdownContent = typeof event.payload === 'string' ? event.payload : '';
 		// Update your frontend UI with the new markdown content
 		console.log('Markdown content updated:', markdownContent);
 	});

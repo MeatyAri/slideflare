@@ -1,10 +1,13 @@
 # TODO:
 
-- make sure same file won't get processed twice
 - add pulldown-cmark for markdown parsing
+    - enable all the extensions
+    - add custom slides parsing
 - add [tailwindcss-typography](https://github.com/tailwindlabs/tailwindcss-typography) to style the html parsed from the markdown
 
 # Testing:
+
+- make sure same file won't get processed twice, used a non-cryptographic hash function
 
 # Later
 
