@@ -25,9 +25,13 @@ async fn start_file_watcher(window: tauri::Window, file_path: String) {
     let title = file_name.trim_end_matches(".md"); // Remove ".md" extension if present
     window.set_title(&format!("SlideFlare: {}", title)).expect("Failed to set window title");
 
-    // Send the initial content of the file
-    send_new_file(&window, &file_path);
+    // create a shared variable to store the last hash
+    let last_hash = Arc::new(Mutex::new(0 as u64));
+    let last_hash_clone = Arc::clone(&last_hash);
 
+    // Send the initial content of the file
+    send_new_file(&window, &file_path, &last_hash_clone);
+    
     let terminate = Arc::new(Mutex::new(false));
     let terminate_clone = Arc::clone(&terminate);
 
@@ -38,6 +42,7 @@ async fn start_file_watcher(window: tauri::Window, file_path: String) {
     });
 
     let terminate_clone = Arc::clone(&terminate);
+    
     let _ = Negahban{
         path: file_path_buf,
         hook: HookType::ControledHook(
@@ -48,8 +53,7 @@ async fn start_file_watcher(window: tauri::Window, file_path: String) {
                 }
 
                 if event.kind == EventType::Modify {
-                    println!("File modified: {:?}", event.paths);
-                    send_new_file(&window, &file_path);
+                    send_new_file(&window, &file_path, &last_hash_clone);
                 }
                 return ControlFlow::Continue(());
             })
