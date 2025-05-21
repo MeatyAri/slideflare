@@ -22,9 +22,9 @@ pub fn send_new_file(window: &tauri::Window, file_path: &str, last_hash: &std::s
                     math_text: true,
                     ..markdown::Constructs::gfm()
                 },
-                ..markdown::ParseOptions::default()
+                ..markdown::ParseOptions::gfm()
             },
-            ..markdown::Options::default()
+            ..markdown::Options::gfm()
         };
         let res = markdown::to_html_with_options(
             &content,
