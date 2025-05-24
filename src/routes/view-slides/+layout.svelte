@@ -1,39 +1,50 @@
 <script>
 	import { onMount } from 'svelte';
-	import { activeIndex } from './shared.svelte.js';
-	import slides from './slides.json';
+	import { shared } from './shared.svelte.js';
+	import { listen } from '@tauri-apps/api/event';
 
 	let { children } = $props();
 
+	// Watch for changes and save to localStorage
+	$effect(() => {
+		localStorage.setItem('slides', JSON.stringify(shared.slides));
+	});
+
 	onMount(() => {
-        /**
-         * Prevent default scroll on wheel and touch
-         * @param {WheelEvent | TouchEvent} e
-         */
+		setTimeout(() => {
+			listen('markdown-updated', (event) => {
+				shared.slides = JSON.parse(event.payload);
+			});
+		}, 0);
+
+		/**
+		 * Prevent default scroll on wheel and touch
+		 * @param {WheelEvent | TouchEvent} e
+		 */
 		const preventScroll = (e) => {
 			e.preventDefault();
 		};
 
-        /**
-         * Handle arrow key navigation
-         * @param {KeyboardEvent} e
-         */
-        const handleArrowKeys = (e) => {
+		/**
+		 * Handle arrow key navigation
+		 * @param {KeyboardEvent} e
+		 */
+		const handleArrowKeys = (e) => {
 			e.preventDefault();
 			if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-				activeIndex.index -= 1;
-				if (activeIndex.index < 0) {
-					activeIndex.index = 0;
+				shared.index -= 1;
+				if (shared.index < 0) {
+					shared.index = 0;
 				}
 			}
 			if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-				activeIndex.index += 1;
-				if (activeIndex.index >= slides.length) {
-					activeIndex.index = slides.length - 1;
+				shared.index += 1;
+				if (shared.index >= shared.slides.length) {
+					shared.index = shared.slides.length - 1;
 				}
 			}
 
-			const slide = document.getElementById(String(activeIndex.index));
+			const slide = document.getElementById(String(shared.index));
 			slide?.scrollIntoView({ behavior: 'smooth' });
 		};
 

@@ -1,4 +1,5 @@
 mod watcher;
+mod parser;
 
 use std::path::PathBuf;
 use std::ops::ControlFlow;
@@ -30,7 +31,7 @@ async fn start_file_watcher(window: tauri::Window, file_path: String) {
     let last_hash_clone = Arc::clone(&last_hash);
 
     // Send the initial content of the file
-    send_new_file(&window, &file_path, &last_hash_clone);
+    let _ = send_new_file(&window, &file_path, &last_hash_clone);
     
     let terminate = Arc::new(Mutex::new(false));
     let terminate_clone = Arc::clone(&terminate);
@@ -53,7 +54,7 @@ async fn start_file_watcher(window: tauri::Window, file_path: String) {
                 }
 
                 if event.kind == EventType::Modify {
-                    send_new_file(&window, &file_path, &last_hash_clone);
+                    let _ = send_new_file(&window, &file_path, &last_hash_clone);
                 }
                 return ControlFlow::Continue(());
             })

@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
 	import { webview } from '@tauri-apps/api';
-	import { listen } from '@tauri-apps/api/event';
 	import { open } from '@tauri-apps/plugin-dialog';
+	import { goto } from '$app/navigation';
 
 	let dragActive = $state(false);
-	let markdownContent = $state('');
 	let error = $state('');
 
 	async function handleFile(filePath: String) {
@@ -63,17 +62,12 @@
 		});
 
 		if (typeof selected === 'string') {
+			await goto('/view-slides');
 			handleFile(selected);
 		} else {
 			console.log('No file selected');
 		}
 	}
-
-	listen('markdown-updated', (event) => {
-		markdownContent = typeof event.payload === 'string' ? event.payload : '';
-		// Update your frontend UI with the new markdown content
-		console.log('Markdown content updated:', markdownContent);
-	});
 </script>
 
 <div
@@ -118,10 +112,10 @@
         webview.getCurrentWebview().emit('terminate-event');
     }}>terminate</button> -->
 
-	{#if markdownContent}
+	<!-- {#if markdownContent}
 		<div class="mt-8 w-full max-w-lg rounded bg-gray-800 p-4 shadow">
 			<h2 class="mb-2 text-lg font-bold text-gray-100">Markdown Content</h2>
 			<article class="dark prose lg:prose-xl">{@html markdownContent}</article>
 		</div>
-	{/if}
+	{/if} -->
 </div>

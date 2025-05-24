@@ -1,6 +1,7 @@
 <script>
-	import slides from './slides.json';
-	import { activeIndex } from './shared.svelte.js';
+	// @ts-nocheck
+
+	import { shared } from './shared.svelte.js';
 	import { onMount } from 'svelte';
 
 	/**
@@ -9,11 +10,11 @@
 	const handleClick = (index) => {
 		const slide = document.getElementById(String(index));
 		slide?.scrollIntoView({ behavior: 'smooth' });
-		activeIndex.index = index;
+		shared.index = index;
 	};
 
 	function handleResize() {
-		const slide = document.getElementById(String(activeIndex.index));
+		const slide = document.getElementById(String(shared.index));
 		slide?.scrollIntoView({ behavior: 'instant' });
 	}
 
@@ -24,10 +25,10 @@
 	);
 
 	let navOffsetTop = $derived.by(() => {
-		if (activeIndex.index > dotsBOffsetLimit) {
+		if (shared.index > dotsBOffsetLimit) {
 			return windowInnerHeight * 0.5 - dotsBOffsetLimit * 48;
 		}
-		return windowInnerHeight * 0.5 - activeIndex.index * 48;
+		return windowInnerHeight * 0.5 - shared.index * 48;
 	});
 
 	onMount(() => {
@@ -53,21 +54,21 @@
 			class="relative z-10 flex w-full flex-col items-center pr-5"
 			bind:clientHeight={dotsHeight}
 		>
-			{#if slides.length > 0}
+			{#if shared.slides.length > 0}
 				<div
 					class="pointer-events-none absolute z-20 transition-[top] duration-300"
-					style="top: {activeIndex.index * 3}rem;"
+					style="top: {shared.index * 3}rem;"
 				>
 					<span
 						class="block h-4 w-4 scale-125 rounded-full border-2 border-blue-500 bg-blue-500 shadow-lg"
 					></span>
 				</div>
 			{/if}
-			{#each slides as slide, index}
+			{#each shared.slides as slide, index}
 				<button
 					class="
                         group relative flex flex-col items-center transition-all focus:outline-none
-                        {activeIndex.index === index ? 'h-18' : 'h-12'}
+                        {shared.index === index ? 'h-18' : 'h-12'}
                     "
 					aria-label={`Go to slide ${index + 1}`}
 					onclick={() => handleClick(index)}
@@ -76,11 +77,11 @@
 						class="
                             h-4 w-4 rounded-full border-2 border-gray-500 bg-gray-700 transition-all"
 					></span>
-					{#if index < slides.length - 1}
+					{#if index < shared.slides.length - 1}
 						<span
 							class="
                             w-1 bg-gray-600 transition-all
-                            {activeIndex.index === index ? 'h-14' : 'h-8'}
+                            {shared.index === index ? 'h-14' : 'h-8'}
                         "
 						></span>
 					{/if}
