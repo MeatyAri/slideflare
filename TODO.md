@@ -3,6 +3,7 @@
 - add pulldown-cmark for markdown parsing
     - enable all the extensions (enabled gfm, math, frontmatter(yaml support))
     - add custom slides parsing
+- handle image/video/file paths correctly
 
 # Testing:
 
