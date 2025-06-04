@@ -1,6 +1,17 @@
 <script>
+	import { onDestroy } from 'svelte';
+
 	let { id, bgColor, textColor, title, content } = $props();
+
+	onDestroy(() => {
+		// refresh the page when the component is destroyed
+        window.location.reload();
+	});
 </script>
+
+<svelte:head>
+	<script src="../tailwind.min.js"></script>
+</svelte:head>
 
 <section {id} class="h-screen w-full {bgColor}">
 	<div class="h-screen w-full px-24">

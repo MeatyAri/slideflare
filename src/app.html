@@ -4,6 +4,30 @@
 		<meta charset="utf-8" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<style>
+			/* Prevent flash of white background */
+			html,
+			body {
+				background-color: #1a1a1a;
+				color: #ffffff;
+			}
+			/*
+            @media (prefers-color-scheme: dark) {
+				html,
+				body {
+					background-color: #1a1a1a;
+					color: #ffffff;
+				}
+			}
+			@media (prefers-color-scheme: light) {
+				html,
+				body {
+					background-color: #ffffff;
+					color: #000000;
+				}
+			}
+            */
+		</style>
 		<title>Tauri + SvelteKit App</title>
 		%sveltekit.head%
 	</head>
