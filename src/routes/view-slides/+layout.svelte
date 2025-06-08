@@ -31,19 +31,24 @@
 		 */
 		const handleArrowKeys = (e) => {
 			e.preventDefault();
+            let shouldScroll = true;
 			if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
 				shared.index -= 1;
 				if (shared.index < 0) {
 					shared.index = 0;
+                    shouldScroll = false;
 				}
 			}
 			if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
 				shared.index += 1;
 				if (shared.index >= shared.slides.length) {
 					shared.index = shared.slides.length - 1;
+                    shouldScroll = false;
 				}
 			}
 
+            if (!shouldScroll) return;
+            // Scroll to the current slide
 			const slide = document.getElementById(String(shared.index));
 			slide?.scrollIntoView({ behavior: 'smooth' });
 		};
