@@ -8,6 +8,7 @@ SlideFlare is a passion project focused on creating beautiful, interactive prese
 - 📦 **Easy Installation**: Download the compiled executable or build from source in minutes.
 - 📊 **Interactive Slides**: Add code snippets, live demos, and multimedia.
 - 🚀 **Easy Sharing**: Export to PDF or share online with a single link.
+- 🛠️ **Development**: Run locally with `bun run tauri dev`
 
 ## Getting Started
 
@@ -27,6 +28,16 @@ SlideFlare is a passion project focused on creating beautiful, interactive prese
     Create your first project simply by creating a markdown file `myslide.md` and then drag & drop it in the app
 
 For more details, check the [documentation](https://github.com/MeatyAri/slideflare/wiki).
+
+## Development
+
+To run SlideFlare in a development environment, use the following command:
+
+```bash
+bun run tauri dev
+```
+
+This will start the application in development mode, allowing you to test and iterate on your changes.
 
 ## Contributing
 

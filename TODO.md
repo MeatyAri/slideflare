@@ -1,10 +1,15 @@
 # TODO:
 
-- add pulldown-cmark for markdown parsing
+- [ ] add pulldown-cmark for markdown parsing
     - [ ] enable all the extensions (enabled gfm, math, frontmatter(yaml support))
     - [x] add custom slides parsing
-- handle image/video/file paths correctly
-- add a more permanent fix for the screen flashing and make sure the dark mode is getting handled properly
+- [ ] handle image/video/file paths correctly
+- [ ] add a more permanent fix for the screen flashing and make sure the dark mode is getting handled properly
+- [ ] add multipart slides
+- [ ] add shiki magic move
+- [ ] add themes, use JSON to create themes
+- [ ] add AI
+- [ ] check for bugs in the hashing system
 
 # Testing:
 

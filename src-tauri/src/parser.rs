@@ -1,10 +1,10 @@
+use gray_matter::{engine::YAML, Matter};
+use pulldown_cmark::{Event, Options, Parser};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use pulldown_cmark::{Parser, Options, Event};
-use gray_matter::{Matter, engine::YAML};
-use std::fs;
 use std::error::Error;
-use regex::Regex;
+use std::fs;
 
 // Define the output JSON structure
 #[derive(Serialize, Deserialize, Debug)]
@@ -19,29 +19,29 @@ pub fn parse_markdown_with_frontmatter(content: &str) -> Result<Vec<Card>, Box<d
     let matter = Matter::<YAML>::new();
     let sections = split_into_sections(content);
     let mut cards = Vec::new();
-    
+
     for section in sections {
         // Extract frontmatter and content
         let result = matter.parse(&section);
         // Convert the YAML data (Pod) to a proper map
         let frontmatter = result.data.as_ref().unwrap();
-        
+
         // Extract required fields from frontmatter with default values
         let bg_color = frontmatter["bgColor"]
             .as_string()
             .unwrap_or("bg-default".to_string());
-            
+
         let text_color = frontmatter["textColor"]
             .as_string()
             .unwrap_or("text-default".to_string());
-            
+
         let title = frontmatter["title"]
             .as_string()
             .unwrap_or("Untitled".to_string());
-        
+
         // Process the content part with Markdown and KaTeX support
         let content = process_markdown_with_katex(&result.content);
-        
+
         cards.push(Card {
             bgColor: bg_color,
             textColor: text_color,
@@ -49,7 +49,7 @@ pub fn parse_markdown_with_frontmatter(content: &str) -> Result<Vec<Card>, Box<d
             content,
         });
     }
-    
+
     Ok(cards)
 }
 
@@ -62,36 +62,36 @@ fn split_into_sections(content: &str) -> Vec<String> {
     // This is to handle cases where the content might start or end with "---"
     content.insert_str(0, "\n");
     content.insert_str(content.len(), "\n");
-    
+
     // The pattern for a markdown document with frontmatter is:
     // 1. It starts with "---"
     // 2. Contains YAML until the next "---"
     // 3. After that, it's markdown content until the next "---" or EOF
-    
+
     // Split the content by "---" lines
     let parts: Vec<&str> = content.split("\n---\n").collect();
     let mut sections = Vec::new();
-    
+
     // Process each pair of parts as a section (YAML + content)
     let mut i = 0;
     while i < parts.len() {
         // First part should be YAML frontmatter (may be empty if starting with ---)
         let yaml = parts[i].trim();
-        
+
         // If we're at the beginning and the first part isn't YAML content, skip it
         if i == 0 && !yaml.is_empty() && !yaml.contains(":") || yaml.is_empty() {
             i += 1;
             continue;
         }
-        
+
         // Second part is markdown content
         if i + 1 < parts.len() {
             let markdown = parts[i + 1].trim();
-            
+
             // Create a proper document with frontmatter for gray_matter to parse
             let section = format!("---\n{}\n---\n{}", yaml, markdown);
             sections.push(section);
-            
+
             // Move to the next pair
             i += 2;
         } else {
@@ -100,7 +100,7 @@ fn split_into_sections(content: &str) -> Vec<String> {
             break;
         }
     }
-    
+
     // If we couldn't extract any valid sections, try to parse the whole file
     if sections.is_empty() && !content.trim().is_empty() {
         // Check if the content has a proper frontmatter structure
@@ -108,7 +108,7 @@ fn split_into_sections(content: &str) -> Vec<String> {
             sections.push(content.to_string());
         }
     }
-    
+
     sections
 }
 
@@ -121,14 +121,14 @@ fn process_markdown_with_katex(content: &str) -> String {
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TASKLISTS);
     options.insert(Options::ENABLE_SMART_PUNCTUATION);
-    
+
     // Parse markdown
     let parser = Parser::new_ext(content, options);
-    
+
     // Convert to HTML first
     let mut html_output = String::new();
     pulldown_cmark::html::push_html(&mut html_output, parser);
-    
+
     // Process KaTeX expressions
     process_katex(&html_output)
 }
@@ -139,11 +139,11 @@ fn process_katex(content: &str) -> String {
     // Pattern for inline math: $...$
     let inline_re = Regex::new(r"\$([^\$]+)\$").unwrap();
     let content = inline_re.replace_all(content, "<span class=\"katex\">$1</span>");
-    
+
     // Pattern for block math: $$...$$
     let block_re = Regex::new(r"\$\$([^\$]+)\$\$").unwrap();
     let content = block_re.replace_all(&content, "<div class=\"katex-block\">$1</div>");
-    
+
     content.to_string()
 }
 
@@ -151,7 +151,7 @@ fn process_katex(content: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_parsing() {
         let input = r#"---
