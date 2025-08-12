@@ -1,27 +1,22 @@
-<script>
-	// @ts-nocheck
-
-	import { shared } from './shared.svelte.js';
+<script lang="ts">
+	import { shared } from './shared.svelte';
 	import { onMount } from 'svelte';
 
-	/**
-	 * @param {number} index
-	 */
-	const handleClick = (index) => {
+	const handleClick = (index: number) => {
 		const slide = document.getElementById(String(index));
 		slide?.scrollIntoView({ behavior: 'smooth' });
 		shared.index = index;
 	};
 
-	function handleResize() {
+	function handleResize(): void {
 		const slide = document.getElementById(String(shared.index));
 		slide?.scrollIntoView({ behavior: 'instant' });
 	}
 
 	let windowInnerHeight = $state(0);
-	let dotsHeight = $state();
+	let dotsHeight = $state<number>();
 	let dotsBOffsetLimit = $derived(
-		Math.ceil((windowInnerHeight * 0.5 - windowInnerHeight * 0.99 + dotsHeight) / 48)
+		Math.ceil((windowInnerHeight * 0.5 - windowInnerHeight * 0.99 + (dotsHeight || 0)) / 48)
 	);
 
 	let navOffsetTop = $derived.by(() => {

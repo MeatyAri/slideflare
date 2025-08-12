@@ -1,19 +1,16 @@
-<script>
-	// @ts-nocheck
+<script lang="ts">
 	import katex from 'katex';
 	import NavBar from './NavBar.svelte';
 	import Slide from './Slide.svelte';
-	import { shared } from './shared.svelte.js';
+	import { shared } from './shared.svelte';
 
 	/**
 	 * Renders KaTeX only on math blocks with the 'math' class
-	 * @param {string} content - The content to process
-	 * @returns {string} - The processed content with rendered math blocks
 	 */
-	function renderMathBlocks(content) {
+	function renderMathBlocks(content: string): string {
 		// Use a regular expression to find math blocks with the 'math' class
 		const mathBlockRegex = /<[^>]*class="[^"]*\bmath\b[^"]*"[^>]*>([\s\S]*?)<\/[^>]*>/g;
-		return content.replace(mathBlockRegex, (match, p1) => {
+		return content.replace(mathBlockRegex, (match: string, p1: string) => {
 			// Render the math content with KaTeX
 			return `<span class="math">${katex.renderToString(p1.trim())}</span>`;
 		});
@@ -25,7 +22,7 @@
 <main class="flex flex-col items-center justify-center">
 	{#each shared.slides as slide, index}
 		<Slide
-			id={index}
+			id={String(index)}
 			bgColor={slide.bgColor}
 			textColor={slide.textColor}
 			title={slide.title}
