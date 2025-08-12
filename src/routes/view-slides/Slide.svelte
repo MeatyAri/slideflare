@@ -5,7 +5,7 @@
 
 	onDestroy(() => {
 		// refresh the page when the component is destroyed
-        window.location.reload();
+		window.location.reload();
 	});
 </script>
 
@@ -16,7 +16,13 @@
 <section {id} class="h-screen w-full {bgColor}">
 	<div class="h-screen w-full px-24">
 		<div class="flex h-screen flex-col items-center justify-center">
-			<article class="prose lg:prose-xl dark:prose-invert {textColor}">{@html content}</article>
+			<article class="prose lg:prose-xl dark:prose-invert {textColor}">
+				{#if typeof content === 'string'}
+					<p>{@html content}</p>
+				{:else}
+					{@html content}
+				{/if}
+			</article>
 		</div>
 	</div>
 </section>

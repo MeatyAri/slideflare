@@ -1,10 +1,8 @@
 use gray_matter::{engine::YAML, Matter};
-use pulldown_cmark::{Event, Options, Parser};
+use pulldown_cmark::{Options, Parser};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::error::Error;
-use std::fs;
 
 // Define the output JSON structure
 #[derive(Serialize, Deserialize, Debug)]
@@ -121,6 +119,8 @@ fn process_markdown_with_katex(content: &str) -> String {
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TASKLISTS);
     options.insert(Options::ENABLE_SMART_PUNCTUATION);
+    options.insert(Options::ENABLE_GFM);
+    options.insert(Options::ENABLE_MATH);
 
     // Parse markdown
     let parser = Parser::new_ext(content, options);
@@ -129,23 +129,25 @@ fn process_markdown_with_katex(content: &str) -> String {
     let mut html_output = String::new();
     pulldown_cmark::html::push_html(&mut html_output, parser);
 
-    // Process KaTeX expressions
-    process_katex(&html_output)
+    // // Process KaTeX expressions
+    // process_katex(&html_output)
+
+    html_output
 }
 
-// Simple KaTeX expression processor
-// Note: For a production system, you'd want to use a dedicated KaTeX renderer
-fn process_katex(content: &str) -> String {
-    // Pattern for inline math: $...$
-    let inline_re = Regex::new(r"\$([^\$]+)\$").unwrap();
-    let content = inline_re.replace_all(content, "<span class=\"katex\">$1</span>");
+// // Simple KaTeX expression processor
+// // Note: For a production system, you'd want to use a dedicated KaTeX renderer
+// fn process_katex(content: &str) -> String {
+//     // Pattern for inline math: $...$
+//     let inline_re = Regex::new(r"\$([^\$]+)\$").unwrap();
+//     let content = inline_re.replace_all(content, "<span class=\"katex\">$1</span>");
 
-    // Pattern for block math: $$...$$
-    let block_re = Regex::new(r"\$\$([^\$]+)\$\$").unwrap();
-    let content = block_re.replace_all(&content, "<div class=\"katex-block\">$1</div>");
+//     // Pattern for block math: $$...$$
+//     let block_re = Regex::new(r"\$\$([^\$]+)\$\$").unwrap();
+//     let content = block_re.replace_all(&content, "<div class=\"katex-block\">$1</div>");
 
-    content.to_string()
-}
+//     content.to_string()
+// }
 
 // Example usage
 #[cfg(test)]
