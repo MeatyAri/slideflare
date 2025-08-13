@@ -10,6 +10,22 @@
 	});
 </script>
 
+<svelte:head>
+	<script src="../tailwind.min.js"></script>
+	<!-- Include the Stylesheet for math -->
+	<!-- <link
+		rel="stylesheet"
+		href="https://cdn.jsdelivr.net/gh/carloskiki/pulldown-latex@latest/styles.min.css"
+	/> -->
+	<!-- Include the Fonts for math -->
+	<!-- <link
+		rel="preload"
+		href="https://cdn.jsdelivr.net/gh/carloskiki/pulldown-latex@latest/font/"
+		as="font"
+		crossorigin="anonymous"
+	/> -->
+</svelte:head>
+
 <NavBar />
 
 <main class="flex flex-col items-center justify-center">

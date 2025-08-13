@@ -1,7 +1,6 @@
 # TODO:
 
 - [ ] handle image/video/file paths correctly
-- [ ] add a more permanent fix for the screen flashing and make sure the dark mode is getting handled properly
 - [ ] add multipart slides
 - [ ] add shiki magic move
 - [ ] add themes, use JSON to create themes
@@ -18,6 +17,7 @@
 - [x] check for bugs in the hashing system
   - there were actually no bugs in the hashing system
   - the problem was with the screen refreshing after any slide change
+- [x] add a more permanent fix for the screen flashing and make sure the dark mode is getting handled properly
 
 # Later
 

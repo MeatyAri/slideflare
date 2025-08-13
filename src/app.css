@@ -4,6 +4,6 @@
 
 @layer utilities {
 	html {
-		@apply bg-gray-100 dark:bg-gray-900 dark:text-amber-50 overflow-hidden;
+		@apply overflow-hidden bg-gray-900 text-amber-50;
 	}
 }
