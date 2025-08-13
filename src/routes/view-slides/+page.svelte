@@ -28,7 +28,7 @@
 
 <NavBar />
 
-<main class="flex flex-col items-center justify-center">
+<main class="flex flex-col items-center justify-center select-none">
 	{#each shared.slides as slide, index}
 		<Slide
 			id={String(index)}

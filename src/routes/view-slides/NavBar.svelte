@@ -14,15 +14,8 @@
 	}
 
 	let windowInnerHeight = $state(0);
-	let dotsHeight = $state<number>();
-	let dotsBOffsetLimit = $derived(
-		Math.ceil((windowInnerHeight * 0.5 - windowInnerHeight * 0.99 + (dotsHeight || 0)) / 48)
-	);
 
 	let navOffsetTop = $derived.by(() => {
-		if (shared.index > dotsBOffsetLimit) {
-			return windowInnerHeight * 0.5 - dotsBOffsetLimit * 48;
-		}
 		return windowInnerHeight * 0.5 - shared.index * 48;
 	});
 
@@ -45,10 +38,7 @@
 		class="absolute transition-all delay-500 duration-300 ease-out"
 		style="top: {navOffsetTop}px;"
 	>
-		<div
-			class="relative z-10 flex w-full flex-col items-center pr-5"
-			bind:clientHeight={dotsHeight}
-		>
+		<div class="relative z-10 flex w-full flex-col items-center pr-5">
 			{#if shared.slides.length > 0}
 				<div
 					class="pointer-events-none absolute z-20 transition-[top] duration-300"
