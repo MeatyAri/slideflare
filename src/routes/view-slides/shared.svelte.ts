@@ -1,8 +1,8 @@
 interface Slide {
 	title: string;
 	content: string;
-	bgColor: string;
-	textColor: string;
+	bg_color: string;
+	text_color: string;
 }
 
 interface SharedState {

@@ -1,14 +1,14 @@
 use gray_matter::{engine::YAML, Matter};
-use pulldown_cmark::{Options, Parser};
-use regex::Regex;
+use pulldown_cmark::{CowStr, Event, Options, Parser as MarkdownParser};
+use pulldown_latex::{mathml::push_mathml, Parser as LatexParser, Storage};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 
 // Define the output JSON structure
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Card {
-    bgColor: String,
-    textColor: String,
+    bg_color: String,
+    text_color: String,
     title: String,
     content: String,
 }
@@ -37,12 +37,12 @@ pub fn parse_markdown_with_frontmatter(content: &str) -> Result<Vec<Card>, Box<d
             .as_string()
             .unwrap_or("Untitled".to_string());
 
-        // Process the content part with Markdown and KaTeX support
-        let content = process_markdown_with_katex(&result.content);
+        // Process the content part with Markdown and LaTeX support
+        let content = process_markdown_with_latex(&result.content);
 
         cards.push(Card {
-            bgColor: bg_color,
-            textColor: text_color,
+            bg_color: bg_color,
+            text_color: text_color,
             title,
             content,
         });
@@ -111,7 +111,7 @@ fn split_into_sections(content: &str) -> Vec<String> {
 }
 
 // Process markdown content and handle KaTeX expressions
-fn process_markdown_with_katex(content: &str) -> String {
+fn process_markdown_with_latex(content: &str) -> String {
     // Set up Markdown parser with all extensions enabled
     let mut options = Options::empty();
     options.insert(Options::ENABLE_TABLES);
@@ -122,32 +122,54 @@ fn process_markdown_with_katex(content: &str) -> String {
     options.insert(Options::ENABLE_GFM);
     options.insert(Options::ENABLE_MATH);
 
+    // Initialize LaTeX processing components once
+    let storage = Storage::new();
+    let config = pulldown_latex::RenderConfig::default();
+    let mut mathml_out = String::new();
+
     // Parse markdown
-    let parser = Parser::new_ext(content, options);
+    let parser = MarkdownParser::new_ext(content, options);
 
-    // Convert to HTML first
+    // Map events to handle math expressions
+    let mapped = parser.map(|evt| match evt {
+        Event::InlineMath(s) => {
+            let latex_source = s.into_string();
+            let latex_parser = LatexParser::new(&latex_source, &storage);
+            mathml_out.clear();
+            match push_mathml(&mut mathml_out, latex_parser, config) {
+                Ok(_) => {
+                    let wrapped = format!("<span class=\"math inline\">{}</span>", mathml_out);
+                    Event::Html(CowStr::Boxed(wrapped.into_boxed_str()))
+                }
+                Err(e) => {
+                    eprintln!("Error while rendering inline math: {}", e);
+                    Event::Text(CowStr::Boxed(format!("Error: {}", e).into_boxed_str()))
+                }
+            }
+        }
+        Event::DisplayMath(s) => {
+            let latex_source = s.into_string();
+            let latex_parser = LatexParser::new(&latex_source, &storage);
+            mathml_out.clear();
+            match push_mathml(&mut mathml_out, latex_parser, config) {
+                Ok(_) => {
+                    let wrapped = format!("<div class=\"math display\">{}</div>", mathml_out);
+                    Event::Html(CowStr::Boxed(wrapped.into_boxed_str()))
+                }
+                Err(e) => {
+                    eprintln!("Error while rendering display math: {}", e);
+                    Event::Text(CowStr::Boxed(format!("Error: {}", e).into_boxed_str()))
+                }
+            }
+        }
+        other => other,
+    });
+
+    // Convert to HTML
     let mut html_output = String::new();
-    pulldown_cmark::html::push_html(&mut html_output, parser);
-
-    // // Process KaTeX expressions
-    // process_katex(&html_output)
-
+    pulldown_cmark::html::push_html(&mut html_output, mapped);
     html_output
 }
-
-// // Simple KaTeX expression processor
-// // Note: For a production system, you'd want to use a dedicated KaTeX renderer
-// fn process_katex(content: &str) -> String {
-//     // Pattern for inline math: $...$
-//     let inline_re = Regex::new(r"\$([^\$]+)\$").unwrap();
-//     let content = inline_re.replace_all(content, "<span class=\"katex\">$1</span>");
-
-//     // Pattern for block math: $$...$$
-//     let block_re = Regex::new(r"\$\$([^\$]+)\$\$").unwrap();
-//     let content = block_re.replace_all(&content, "<div class=\"katex-block\">$1</div>");
-
-//     content.to_string()
-// }
 
 // Example usage
 #[cfg(test)]
@@ -185,7 +207,12 @@ $f(x) = \int_{-\infty}^{\infty} \hat{f}(\xi) e^{2 \pi i \xi x} d\xi$
         let result = parse_markdown_with_frontmatter(input).unwrap();
         assert_eq!(result.len(), 3);
         assert_eq!(result[0].title, "Introduction to JavaScript");
-        assert_eq!(result[1].bgColor, "bg-green-500");
-        assert_eq!(result[2].textColor, "text-white");
+        assert_eq!(result[1].bg_color, "bg-green-500");
+        assert_eq!(result[2].text_color, "text-white");
+
+        // Check that LaTeX is properly parsed in the content
+        assert!(result[2]
+            .content
+            .contains("<span class=\"math inline\"><math display=\"inline\">"));
     }
 }

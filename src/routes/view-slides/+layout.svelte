@@ -2,22 +2,10 @@
 	import { onMount } from 'svelte';
 	import type { Snippet } from 'svelte';
 	import { shared } from './shared.svelte';
-	import { listen } from '@tauri-apps/api/event';
 
 	let { children }: { children: Snippet } = $props();
 
-	// Watch for changes and save to localStorage
-	$effect(() => {
-		localStorage.setItem('slides', JSON.stringify(shared.slides));
-	});
-
 	onMount(() => {
-		setTimeout(() => {
-			listen('markdown-updated', (event: any) => {
-				shared.slides = JSON.parse(event.payload as string);
-			});
-		}, 0);
-
 		/**
 		 * Prevent default scroll on wheel and touch
 		 */

@@ -12,8 +12,9 @@
 
 - add [tailwindcss-typography](https://github.com/tailwindlabs/tailwindcss-typography) to style the html parsed from the markdown
 - [x] add pulldown-cmark for markdown parsing
-    - [x] enable all the extensions (enabled gfm, math, frontmatter(yaml support))
-    - [x] add custom slides parsing
+  - [x] enable all the extensions (enabled gfm, math, frontmatter(yaml support))
+  - [x] add custom slides parsing
+
 # Later
 
 - use windicss or postcss to get rid of the tailwind.js file and remove the screen refreshing (it is done to get rid of the previously applied styles) (potential fixes)
