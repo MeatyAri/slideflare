@@ -2,6 +2,12 @@
 	import NavBar from './NavBar.svelte';
 	import Slide from './Slide.svelte';
 	import { shared } from './shared.svelte';
+	import { onDestroy } from 'svelte';
+
+	onDestroy(() => {
+		// refresh the page when the component is destroyed
+		window.location.reload();
+	});
 </script>
 
 <NavBar />

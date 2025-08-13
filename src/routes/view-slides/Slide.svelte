@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
-
 	interface Props {
 		id: string;
 		bgColor: string;
@@ -10,11 +8,6 @@
 	}
 
 	let { id, bgColor, textColor, title, content }: Props = $props();
-
-	onDestroy(() => {
-		// refresh the page when the component is destroyed
-		window.location.reload();
-	});
 </script>
 
 <svelte:head>

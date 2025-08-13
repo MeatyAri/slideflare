@@ -6,7 +6,8 @@
 - [ ] add shiki magic move
 - [ ] add themes, use JSON to create themes
 - [ ] add AI
-- [ ] check for bugs in the hashing system
+- [ ] make the slide parsing more efficient by parsing everything at once rather than per slide
+- [ ] add better styling
 
 # Testing:
 
@@ -14,6 +15,9 @@
 - [x] add pulldown-cmark for markdown parsing
   - [x] enable all the extensions (enabled gfm, math, frontmatter(yaml support))
   - [x] add custom slides parsing
+- [x] check for bugs in the hashing system
+  - there were actually no bugs in the hashing system
+  - the problem was with the screen refreshing after any slide change
 
 # Later
 
