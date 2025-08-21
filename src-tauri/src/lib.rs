@@ -32,7 +32,7 @@ async fn start_file_watcher(window: tauri::Window, file_path: String) {
         .expect("Failed to set window title");
 
     // create a shared variable to store the last hash
-    let last_hash = Arc::new(Mutex::new(0 as u64));
+    let last_hash = Arc::new(Mutex::new(0_u64));
     let last_hash_clone = Arc::clone(&last_hash);
 
     // Send the initial content of the file
@@ -60,7 +60,8 @@ async fn start_file_watcher(window: tauri::Window, file_path: String) {
             if event.kind == EventType::Modify {
                 let _ = send_new_file(&window, &file_path, &last_hash_clone);
             }
-            return ControlFlow::Continue(());
+
+            ControlFlow::Continue(())
         })),
         ..Negahban::default() // sets rest of them to default
     }

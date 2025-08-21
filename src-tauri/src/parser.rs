@@ -41,8 +41,8 @@ pub fn parse_markdown_with_frontmatter(content: &str) -> Result<Vec<Card>, Box<d
         let content = process_markdown_with_latex(&result.content);
 
         cards.push(Card {
-            bg_color: bg_color,
-            text_color: text_color,
+            bg_color,
+            text_color,
             title,
             content,
         });
@@ -58,8 +58,8 @@ fn split_into_sections(content: &str) -> Vec<String> {
 
     // Add newlines at the beginning and end to ensure proper splitting
     // This is to handle cases where the content might start or end with "---"
-    content.insert_str(0, "\n");
-    content.insert_str(content.len(), "\n");
+    content.insert(0, '\n');
+    content.insert(content.len(), '\n');
 
     // The pattern for a markdown document with frontmatter is:
     // 1. It starts with "---"
