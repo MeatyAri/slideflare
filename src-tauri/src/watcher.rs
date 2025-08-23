@@ -1,4 +1,4 @@
-use std::{error::Error, fs};
+use std::{error::Error, fs, path::PathBuf};
 
 use tauri::Emitter;
 use twox_hash::XxHash64;
@@ -19,8 +19,15 @@ pub fn send_new_file(
         }
         *last_hash_lock = hash;
 
+        // Get the directory of the markdown file for relative path resolution
+        let base_dir = PathBuf::from(file_path)
+            .parent()
+            .unwrap_or(&PathBuf::from("."))
+            .to_string_lossy()
+            .to_string();
+
         // Parse the markdown file with frontmatter
-        let res = parse_markdown_with_frontmatter(&content)?;
+        let res = parse_markdown_with_frontmatter(&content, &base_dir)?;
 
         // Convert to prettified JSON string
         let json_string = serde_json::to_string_pretty(&res)?;

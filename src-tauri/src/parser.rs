@@ -13,7 +13,10 @@ pub struct Card {
     content: String,
 }
 
-pub fn parse_markdown_with_frontmatter(content: &str) -> Result<Vec<Card>, Box<dyn Error>> {
+pub fn parse_markdown_with_frontmatter(
+    content: &str,
+    base_dir: &str,
+) -> Result<Vec<Card>, Box<dyn Error>> {
     let matter = Matter::<YAML>::new();
     let sections = split_into_sections(content);
     let mut cards = Vec::new();
@@ -38,7 +41,7 @@ pub fn parse_markdown_with_frontmatter(content: &str) -> Result<Vec<Card>, Box<d
             .unwrap_or("Untitled".to_string());
 
         // Process the content part with Markdown and LaTeX support
-        let content = process_markdown_with_latex(&result.content);
+        let content = process_markdown_with_latex(&result.content, base_dir);
 
         cards.push(Card {
             bg_color,
@@ -111,7 +114,7 @@ fn split_into_sections(content: &str) -> Vec<String> {
 }
 
 // Process markdown content and handle KaTeX expressions
-fn process_markdown_with_latex(content: &str) -> String {
+fn process_markdown_with_latex(content: &str, base_dir: &str) -> String {
     // Set up Markdown parser with all extensions enabled
     let mut options = Options::empty();
     options.insert(Options::ENABLE_TABLES);
@@ -168,7 +171,94 @@ fn process_markdown_with_latex(content: &str) -> String {
     // Convert to HTML
     let mut html_output = String::new();
     pulldown_cmark::html::push_html(&mut html_output, mapped);
-    html_output
+
+    // Post-process HTML to convert asset paths
+    post_process_asset_paths(&html_output, base_dir)
+}
+
+fn resolve_asset_path(path: String) -> String {
+    // Simple conversion to asset protocol URL
+    let normalized_path = path.replace("\\", "/");
+    format!("asset://localhost/{}", normalized_path)
+}
+
+// Post-process HTML to mark asset paths for frontend conversion
+fn post_process_asset_paths(html: &str, base_dir: &str) -> String {
+    use regex::Regex;
+
+    let mut result = html.to_string();
+
+    // Handle img tags
+    let img_regex = Regex::new(r#"<img([^>]+)src="([^"]+)"([^>]*)>"#).unwrap();
+    result = img_regex
+        .replace_all(&result, |caps: &regex::Captures| {
+            let before_src = &caps[1];
+            let src_path = &caps[2];
+            let after_src = &caps[3];
+
+            // Add data attributes for frontend processing
+            let new_src = if src_path.starts_with('/') || src_path.starts_with("http") {
+                src_path.to_string()
+            } else {
+                format!("{}/{}", base_dir.trim_end_matches('/'), src_path).replace("//", "/")
+            };
+
+            let new_src = resolve_asset_path(new_src);
+
+            format!(
+                r#"<img{}src="{}" data-asset-path="{}" data-base-dir="{}"{}>"#,
+                before_src, new_src, src_path, base_dir, after_src
+            )
+        })
+        .to_string();
+
+    // Handle video tags
+    let video_regex = Regex::new(r#"<video([^>]+)src="([^"]+)"([^>]*)>"#).unwrap();
+    result = video_regex
+        .replace_all(&result, |caps: &regex::Captures| {
+            let before_src = &caps[1];
+            let src_path = &caps[2];
+            let after_src = &caps[3];
+
+            let new_src = if src_path.starts_with('/') || src_path.starts_with("http") {
+                src_path.to_string()
+            } else {
+                format!("{}/{}", base_dir.trim_end_matches('/'), src_path).replace("//", "/")
+            };
+
+            let new_src = resolve_asset_path(new_src);
+
+            format!(
+                r#"<video{}src="{}" data-asset-path="{}" data-base-dir="{}"{}>"#,
+                before_src, new_src, src_path, base_dir, after_src
+            )
+        })
+        .to_string();
+
+    // Handle source tags within video elements
+    let source_regex = Regex::new(r#"<source([^>]+)src="([^"]+)"([^>]*)>"#).unwrap();
+    result = source_regex
+        .replace_all(&result, |caps: &regex::Captures| {
+            let before_src = &caps[1];
+            let src_path = &caps[2];
+            let after_src = &caps[3];
+
+            let new_src = if src_path.starts_with('/') || src_path.starts_with("http") {
+                src_path.to_string()
+            } else {
+                format!("{}/{}", base_dir.trim_end_matches('/'), src_path).replace("//", "/")
+            };
+
+            let new_src = resolve_asset_path(new_src);
+
+            format!(
+                r#"<source{}src="{}" data-asset-path="{}" data-base-dir="{}"{}>"#,
+                before_src, new_src, src_path, base_dir, after_src
+            )
+        })
+        .to_string();
+
+    result
 }
 
 // Example usage
@@ -204,7 +294,7 @@ Functions are reusable blocks of code that perform a specific task.
 $f(x) = \int_{-\infty}^{\infty} \hat{f}(\xi) e^{2 \pi i \xi x} d\xi$
 "#;
 
-        let result = parse_markdown_with_frontmatter(input).unwrap();
+        let result = parse_markdown_with_frontmatter(input, "/test/base").unwrap();
         assert_eq!(result.len(), 3);
         assert_eq!(result[0].title, "Introduction to JavaScript");
         assert_eq!(result[1].bg_color, "bg-green-500");
