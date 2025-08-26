@@ -1,6 +1,8 @@
 # TODO:
 
 - [ ] handle image/video/file paths correctly
+  - [x] image
+  - [ ] video (not working on linux)
 - [ ] add multipart slides
 - [ ] add shiki magic move
 - [ ] add themes, use JSON to create themes
@@ -10,15 +12,6 @@
 
 # Testing:
 
-- add [tailwindcss-typography](https://github.com/tailwindlabs/tailwindcss-typography) to style the html parsed from the markdown
-- [x] add pulldown-cmark for markdown parsing
-  - [x] enable all the extensions (enabled gfm, math, frontmatter(yaml support))
-  - [x] add custom slides parsing
-- [x] check for bugs in the hashing system
-  - there were actually no bugs in the hashing system
-  - the problem was with the screen refreshing after any slide change
-- [x] add a more permanent fix for the screen flashing and make sure the dark mode is getting handled properly
-
 # Later
 
 - use windicss or postcss to get rid of the tailwind.js file and remove the screen refreshing (it is done to get rid of the previously applied styles) (potential fixes)
@@ -27,6 +20,14 @@
 
 # Done
 
+- add [tailwindcss-typography](https://github.com/tailwindlabs/tailwindcss-typography) to style the html parsed from the markdown
+- [x] add pulldown-cmark for markdown parsing
+  - [x] enable all the extensions (enabled gfm, math, frontmatter(yaml support))
+  - [x] add custom slides parsing
+- [x] check for bugs in the hashing system
+  - there were actually no bugs in the hashing system
+  - the problem was with the screen refreshing after any slide change
+- [x] add a more permanent fix for the screen flashing and make sure the dark mode is getting handled properly
 - fixed file watcher and termination logic
 - on resize scroll to the active slide with no animation (to keep it persistent when changing resolution or window size)
 - make sure same file won't get processed twice, used a non-cryptographic hash function
