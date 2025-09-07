@@ -9,6 +9,8 @@
 - [ ] add AI
 - [ ] make the slide parsing more efficient by parsing everything at once rather than per slide
 - [ ] add better styling
+- [ ] add easy way to convert slides from other platforms to slideflare:
+  - [ ] get the pdf output of ther platforms and convert them to slideflare markdown using mistral OCR or other OCR tools that support images (mistral takes screenshots of the things that are not convertable to markdown)
 
 # Testing:
 
