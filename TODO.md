@@ -1,9 +1,15 @@
 # TODO:
 
-- [ ] handle image/video/file paths correctly
+- [ ] handle image/video paths correctly
   - [x] image
-  - [ ] video (not working on linux)
+  - [x] video
+  - [ ] fix handling of absolute paths
+  - [ ] use tokio instead of std
+  - [ ] add proper styling to images/videos
+  - [ ] only process images/videos of the current slide or current + next slide (maybe remove previously loaded content after moving to the next slide)
+- [ ] parallelize the image/video processing OR slides processing as a whole
 - [ ] add multipart slides
+- [ ] add mermaid diagrams
 - [ ] add shiki magic move
 - [ ] add themes, use JSON to create themes
 - [ ] add AI
