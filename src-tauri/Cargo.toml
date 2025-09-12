@@ -1,8 +1,8 @@
 [package]
 name = "slideflare"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "⚡Blazing fast, interactive presentation tool for developers, educators, and creators to build and share beautiful slides effortlessly."
+authors = ["meatyari"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -24,11 +24,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-dialog = "2"
 tokio = { version = "1", features = ["full"] }
-notify = "8.0.0"
+notify = "8"
 negahban = "0.3.1"
 twox-hash = "2"
-pulldown-cmark = "0.13"
-gray_matter = "0.2"
+pulldown-cmark = "0"
+gray_matter = "0"
 regex = "1"
 pulldown-latex = "0"
 base64 = "0"

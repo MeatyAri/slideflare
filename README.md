@@ -12,20 +12,21 @@ SlideFlare is a passion project focused on creating beautiful, interactive prese
 
 ## Getting Started
 
-1. **Download SlideFlare**  
-    Visit the [releases page](https://github.com/MeatyAri/slideflare/releases) to download the latest version for your platform.
+1. **Download SlideFlare**
+   Visit the [releases page](https://github.com/MeatyAri/slideflare/releases) to download the latest version for your platform.
 
-2. **Install**  
-    - **Linux/macOS**:  
-      ```bash
-      chmod +x slideflare
-      ./slideflare
-      ```
-    - **Windows**:  
-      Double-click the downloaded executable to run.
+2. **Install**
 
-3. **Create Your First Presentation**  
-    Create your first project simply by creating a markdown file `myslide.md` and then drag & drop it in the app
+   - **Linux/macOS**:
+     ```bash
+     chmod +x slideflare
+     ./slideflare
+     ```
+   - **Windows**:
+     Double-click the downloaded executable to run.
+
+3. **Create Your First Presentation**
+   Create your first project simply by creating a markdown file `myslide.md` and then drag & drop it in the app
 
 For more details, check the [documentation](https://github.com/MeatyAri/slideflare/wiki).
 

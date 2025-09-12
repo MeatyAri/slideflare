@@ -4,19 +4,29 @@
   - [x] image
   - [x] video
   - [ ] fix handling of absolute paths
-  - [ ] use tokio instead of std
   - [ ] add proper styling to images/videos
-  - [ ] only process images/videos of the current slide or current + next slide (maybe remove previously loaded content after moving to the next slide)
-- [ ] parallelize the image/video processing OR slides processing as a whole
 - [ ] add multipart slides
 - [ ] add mermaid diagrams
 - [ ] add shiki magic move
 - [ ] add themes, use JSON to create themes
 - [ ] add AI
-- [ ] make the slide parsing more efficient by parsing everything at once rather than per slide
 - [ ] add better styling
 - [ ] add easy way to convert slides from other platforms to slideflare:
   - [ ] get the pdf output of ther platforms and convert them to slideflare markdown using mistral OCR or other OCR tools that support images (mistral takes screenshots of the things that are not convertable to markdown)
+
+- [ ] make slideflare faster: \
+  either:
+  - [ ] make the slide parsing more efficient by parsing everything at once rather than per slide \
+  or:
+  - [ ] use tokio instead of std for asynchronous file reading
+  - [ ] parallelize the image/video processing OR slides processing as a whole
+
+  - [ ] only process images/videos of the current slide or current + next slide (maybe remove previously loaded content after moving to the next slide)
+
+- [ ] write a better readme
+- [ ] fix the licensing
+- [ ] complete the documentation
+- [ ] write more tests and move them into a separate folder
 
 # Testing:
 
