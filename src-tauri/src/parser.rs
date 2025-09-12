@@ -17,6 +17,17 @@ pub struct Card {
     content: String,
 }
 
+impl Default for Card {
+    fn default() -> Self {
+        Self {
+            bg_color: "bg-default".to_string(),
+            text_color: "text-default".to_string(),
+            title: "Untitled".to_string(),
+            content: String::new(),
+        }
+    }
+}
+
 pub fn parse_markdown_with_frontmatter(
     content: &str,
     base_dir: &str,
@@ -29,7 +40,17 @@ pub fn parse_markdown_with_frontmatter(
         // Extract frontmatter and content
         let result = matter.parse(&section);
         // Convert the YAML data (Pod) to a proper map
-        let frontmatter = result.data.as_ref().unwrap();
+        let frontmatter = match result.data.as_ref() {
+            Some(data) => data,
+            None => {
+                // If there's no frontmatter, use default values
+                cards.push(Card {
+                    content: process_markdown_with_latex(&result.content, base_dir),
+                    ..Card::default()
+                });
+                continue;
+            }
+        };
 
         // Extract required fields from frontmatter with default values
         let bg_color = frontmatter["bgColor"]

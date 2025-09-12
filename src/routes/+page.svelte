@@ -8,6 +8,8 @@
 	let error = $state('');
 
 	async function handleFile(filePath: String) {
+		await goto('/view-slides');
+
 		try {
 			// Invoke the Rust command with the file paths
 			await invoke('start_file_watcher', { filePath }).catch((error) =>
@@ -62,7 +64,6 @@
 		});
 
 		if (typeof selected === 'string') {
-			await goto('/view-slides');
 			handleFile(selected);
 		} else {
 			console.log('No file selected');
