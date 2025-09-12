@@ -10,20 +10,26 @@ use base64::engine::general_purpose::STANDARD;
 
 // Define the output JSON structure
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Card {
+pub struct Slide {
     bg_color: String,
     text_color: String,
     title: String,
     content: String,
 }
 
-impl Default for Card {
+#[derive(Deserialize, Debug)]
+pub struct Frontmatter {
+    bg_color: Option<String>,
+    text_color: Option<String>,
+    title: Option<String>,
+}
+
+impl Default for Frontmatter {
     fn default() -> Self {
         Self {
-            bg_color: "bg-default".to_string(),
-            text_color: "text-default".to_string(),
-            title: "Untitled".to_string(),
-            content: String::new(),
+            bg_color: Some("".to_string()),
+            text_color: Some("".to_string()),
+            title: Some("Untitled".to_string()),
         }
     }
 }
@@ -31,49 +37,37 @@ impl Default for Card {
 pub fn parse_markdown_with_frontmatter(
     content: &str,
     base_dir: &str,
-) -> Result<Vec<Card>, Box<dyn Error>> {
+) -> Result<Vec<Slide>, Box<dyn Error>> {
     let matter = Matter::<YAML>::new();
     let sections = split_into_sections(content);
     let mut cards = Vec::new();
 
     for section in sections {
         // Extract frontmatter and content
-        let result = matter.parse(&section);
+        let result = matter.parse::<Frontmatter>(&section)?;
+
         // Convert the YAML data (Pod) to a proper map
+        // let frontmatter = result.data.as_ref().unwrap_or(&Frontmatter::default());
         let frontmatter = match result.data.as_ref() {
             Some(data) => data,
             None => {
                 // If there's no frontmatter, use default values
-                cards.push(Card {
-                    content: process_markdown_with_latex(&result.content, base_dir),
-                    ..Card::default()
-                });
-                continue;
+                &Frontmatter::default()
             }
         };
-
-        // Extract required fields from frontmatter with default values
-        let bg_color = frontmatter["bgColor"]
-            .as_string()
-            .unwrap_or("bg-default".to_string());
-
-        let text_color = frontmatter["textColor"]
-            .as_string()
-            .unwrap_or("text-default".to_string());
-
-        let title = frontmatter["title"]
-            .as_string()
-            .unwrap_or("Untitled".to_string());
 
         // Process the content part with Markdown and LaTeX support
         let content = process_markdown_with_latex(&result.content, base_dir);
 
-        cards.push(Card {
-            bg_color,
-            text_color,
-            title,
+        let slide = Slide {
             content,
-        });
+            bg_color: frontmatter.bg_color.clone().unwrap_or_default(),
+            text_color: frontmatter.text_color.clone().unwrap_or_default(),
+            title: frontmatter.title.clone().unwrap_or_default(),
+        };
+        // println!("Slide created: {:?}", slide);
+
+        cards.push(slide);
     }
 
     Ok(cards)

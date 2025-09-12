@@ -33,8 +33,8 @@ fn send_new_file(
         // Parse the markdown file with frontmatter
         let res = parse_markdown_with_frontmatter(&content, &base_dir)?;
 
-        // Convert to prettified JSON string
-        let json_string = serde_json::to_string_pretty(&res)?;
+        // Convert to JSON string
+        let json_string = serde_json::to_string(&res)?;
 
         // Emit the content to the frontend
         window

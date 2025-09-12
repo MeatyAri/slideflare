@@ -1,6 +1,6 @@
 ---
-bgColor: bg-blue-800
-textColor: text-white
+bg_color: bg-blue-800
+text_color: text-white
 title: Introduction to Machine Learning
 ---
 
@@ -15,8 +15,8 @@ Machine Learning enables systems to learn patterns from data.
 ## Let’s get started!
 
 ---
-bgColor: bg-teal-600
-textColor: text-white text-center
+bg_color: bg-teal-600
+text_color: text-white text-center
 title: Types of Learning
 ---
 
@@ -29,8 +29,8 @@ Supervised, unsupervised, and reinforcement learning are the three main paradigm
 - **Reinforcement**: Agent learns by interacting and receiving rewards
 
 ---
-bgColor: bg-green-700
-textColor: text-white
+bg_color: bg-green-700
+text_color: text-white
 title: Linear Regression
 ---
 
@@ -45,8 +45,8 @@ $$
 ## Look at this subscript: $w_{j}$
 
 ---
-bgColor: bg-yellow-500
-textColor: text-black text-center
+bg_color: bg-yellow-500
+text_color: text-black text-center
 title: Regularization
 ---
 
@@ -58,8 +58,8 @@ Regularization helps prevent overfitting by adding a penalty term.
 ## Trade-off: bias vs. variance
 
 ---
-bgColor: bg-purple-600
-textColor: text-white
+bg_color: bg-purple-600
+text_color: text-white
 title: Neural Networks
 ---
 
@@ -76,16 +76,16 @@ $$
 - Tanh: $\tanh(z) = \frac{e^{z} - e^{-z}}{e^{z} + e^{-z}}$
 
 ---
-bgColor: bg-gray-700
-textColor: text-white text-center
+bg_color: bg-gray-700
+text_color: text-white text-center
 title: Sample Image
 ---
 
 ![Sample Image](./images/sample-image.png)
 
 ---
-bgColor: bg-red-600
-textColor: text-white text-center
+bg_color: bg-red-600
+text_color: text-white text-center
 title: Sample Video
 ---
 
