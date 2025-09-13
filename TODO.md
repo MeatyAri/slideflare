@@ -3,7 +3,7 @@
 - [ ] handle image/video paths correctly
   - [x] image
   - [x] video
-  - [ ] fix handling of absolute paths
+  - [x] fix handling of absolute paths
   - [ ] add proper styling to images/videos
 - [ ] add multipart slides
 - [ ] add mermaid diagrams

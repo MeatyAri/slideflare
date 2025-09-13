@@ -198,17 +198,17 @@ fn post_process_asset_paths(html: &str, base_dir: &str) -> String {
         let after_src = &caps[3];
 
         // Determine whether the src is a remote or absolute path
-        let processed_src = if src_path.starts_with('/') || src_path.starts_with("http") {
+        let full_path = if src_path.starts_with('/') || src_path.starts_with("http") {
             src_path.to_string()
         } else {
             // Build full filesystem path relative to the base_dir
-            let full_path =
-                format!("{}/{}", base_dir.trim_end_matches('/'), src_path).replace("//", "/");
-            // Attempt to read and embed as Base64; fall back to asset:// protocol on error
-            match read_file_as_base64(&full_path) {
-                Ok(data_url) => data_url,
-                Err(_) => resolve_asset_path(full_path),
-            }
+            format!("{}/{}", base_dir.trim_end_matches('/'), src_path).replace("//", "/")
+        };
+
+        // Attempt to read and embed as Base64; fall back to asset:// protocol on error
+        let processed_src = match read_file_as_base64(&full_path) {
+            Ok(data_url) => data_url,
+            Err(_) => resolve_asset_path(full_path),
         };
 
         format!(
