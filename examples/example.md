@@ -81,7 +81,14 @@ text_color: text-white text-center
 title: Sample Image
 ---
 
-![Sample Image](./images/sample-image.png)
+<div class="card">
+
+## Rust Crab Photo
+Below is a striking photograph of a rust‑colored crab, highlighting its textured shell and vivid coloration.
+
+![Rust Crab](./images/sample-image.png)
+
+</div>
 
 ---
 bg_color: bg-red-600
@@ -89,6 +96,14 @@ text_color: text-white text-center
 title: Sample Video
 ---
 
-<video src="./videos/sample-video.mp4" controls></video>
+<div class="card">
+
+## Rickroll Surprise
+
+<video src="./videos/sample-video.mp4" autoplay loop></video>
+
+A playful nod to internet culture.
+
+</div>
 
 ---

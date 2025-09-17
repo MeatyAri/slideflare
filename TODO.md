@@ -1,10 +1,5 @@
 # TODO:
 
-- [ ] handle image/video paths correctly
-  - [x] image
-  - [x] video
-  - [x] fix handling of absolute paths
-  - [ ] add proper styling to images/videos
 - [ ] add multipart slides
 - [ ] add mermaid diagrams
 - [ ] add shiki magic move
@@ -29,6 +24,12 @@
 - [ ] write more tests and move them into a separate folder
 
 # Testing:
+
+- [x] handle image/video paths correctly
+  - [x] image
+  - [x] video
+  - [x] fix handling of absolute paths
+  - [x] add proper styling to images/videos
 
 # Later
 

@@ -6,4 +6,20 @@
 	html {
 		@apply overflow-hidden bg-gray-900 text-amber-50;
 	}
+
+	.card {
+		@apply flex flex-col gap-7 rounded-3xl bg-neutral-100/10 p-7 backdrop-blur-2xl;
+	}
+
+	.card * {
+		@apply m-0! rounded-3xl;
+	}
+
+	img {
+		@apply rounded-3xl;
+	}
+
+	video {
+		@apply rounded-3xl;
+	}
 }
