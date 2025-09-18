@@ -23,6 +23,7 @@
 
 # Testing:
 
+- [ ] test the examples provided in the readme
 - [x] handle image/video paths correctly
   - [x] image
   - [x] video
