@@ -18,8 +18,6 @@
 
   - [ ] only process images/videos of the current slide or current + next slide (maybe remove previously loaded content after moving to the next slide)
 
-- [ ] write a better readme
-- [ ] fix the licensing
 - [ ] complete the documentation
 - [ ] write more tests and move them into a separate folder
 
@@ -33,12 +31,13 @@
 
 # Later
 
-- use windicss or postcss to get rid of the tailwind.js file and remove the screen refreshing (it is done to get rid of the previously applied styles) (potential fixes)
 - add convert to pdf
 - add custom code component
 
 # Done
 
+- [x] write a better readme
+- [x] fix the licensing
 - add [tailwindcss-typography](https://github.com/tailwindlabs/tailwindcss-typography) to style the html parsed from the markdown
 - [x] add pulldown-cmark for markdown parsing
   - [x] enable all the extensions (enabled gfm, math, frontmatter(yaml support))
