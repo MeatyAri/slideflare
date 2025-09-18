@@ -108,15 +108,4 @@
 			<p class="mt-4 text-center text-sm text-red-400">{error}</p>
 		{/if}
 	</div>
-
-	<!-- <button class="p-4 bg-amber-400 cursor-pointer" onclick={() => {
-        webview.getCurrentWebview().emit('terminate-event');
-    }}>terminate</button> -->
-
-	<!-- {#if markdownContent}
-		<div class="mt-8 w-full max-w-lg rounded bg-gray-800 p-4 shadow">
-			<h2 class="mb-2 text-lg font-bold text-gray-100">Markdown Content</h2>
-			<article class="dark prose lg:prose-xl">{@html markdownContent}</article>
-		</div>
-	{/if} -->
 </div>

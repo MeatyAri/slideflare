@@ -1,11 +1,13 @@
 <script lang="ts">
 	import NavBar from './NavBar.svelte';
 	import Slide from './Slide.svelte';
+	import { webview } from '@tauri-apps/api';
 	import { shared } from './shared.svelte';
 	import { onDestroy } from 'svelte';
 
 	onDestroy(() => {
-		// refresh the page when the component is destroyed
+		// terminate the watcher and refresh the page when exiting the slides
+		webview.getCurrentWebview().emit('terminate-event');
 		window.location.reload();
 	});
 </script>
