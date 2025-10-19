@@ -1,5 +1,6 @@
 # TODO:
 
+- [ ] run tests on building release
 - [ ] add multipart slides
 - [ ] add mermaid diagrams
 - [ ] add shiki magic move

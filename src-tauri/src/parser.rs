@@ -1,6 +1,8 @@
 use base64::Engine;
 use gray_matter::{engine::YAML, Matter};
-use pulldown_cmark::{CowStr, Event, Options, Parser as MarkdownParser};
+use pulldown_cmark::{
+    CodeBlockKind, CowStr, Event, Options, Parser as MarkdownParser, Tag, TagEnd,
+};
 use pulldown_latex::{mathml::push_mathml, Parser as LatexParser, Storage};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
@@ -134,6 +136,7 @@ fn process_markdown_with_latex(content: &str, base_dir: &str) -> String {
     let storage = Storage::new();
     let config = pulldown_latex::RenderConfig::default();
     let mut mathml_out = String::new();
+    let mut in_mermaid = false;
 
     // Parse markdown and replace math events with MathML
     let parser = MarkdownParser::new_ext(content, options);
@@ -166,6 +169,24 @@ fn process_markdown_with_latex(content: &str, base_dir: &str) -> String {
                     eprintln!("Error while rendering display math: {}", e);
                     Event::Text(CowStr::Boxed(format!("Error: {}", e).into_boxed_str()))
                 }
+            }
+        }
+        Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(lang))) => {
+            if lang.as_ref() == "mermaid" {
+                in_mermaid = true;
+                // Push raw HTML for opening div
+                Event::Html("<div class=\"mermaid\">".into())
+            } else {
+                Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(lang)))
+            }
+        }
+        Event::End(TagEnd::CodeBlock) => {
+            if in_mermaid {
+                in_mermaid = false;
+                // Push raw HTML for closing div
+                Event::Html("</div>".into())
+            } else {
+                Event::End(TagEnd::CodeBlock)
             }
         }
         other => other,
@@ -263,15 +284,15 @@ mod tests {
     #[test]
     fn test_parsing() {
         let input = r#"---
-bgColor: bg-blue-500
-textColor: text-white
+bg_color: bg-blue-500
+text_color: text-white
 title: Introduction to JavaScript
 ---
 JavaScript is a versatile programming language used for web development.
 
 ---
-bgColor: bg-green-500
-textColor: text-white
+bg_color: bg-green-500
+text_color: text-white
 title: Variables and Data Types
 ---
 JavaScript supports various data types including strings, numbers, and objects.
@@ -279,8 +300,8 @@ JavaScript supports various data types including strings, numbers, and objects.
 The area of a circle is $A = \pi r^2$.
 
 ---
-bgColor: bg-red-500
-textColor: text-white
+bg_color: bg-red-500
+text_color: text-white
 title: Functions
 ---
 Functions are reusable blocks of code that perform a specific task.
@@ -307,8 +328,8 @@ $f(x) = \int_{-\infty}^{\infty} \hat{f}(\\xi) e^{2 \\pi i \\xi x} d\\xi$
 
         let markdown = format!(
             r#"---
-bgColor: bg-gray-200
-textColor: text-black
+bg_color: bg-gray-200
+text_color: text-black
 title: Image Test
 ---
 ![]({})"#,
@@ -349,8 +370,8 @@ title: Image Test
 
         let markdown = format!(
             r#"---
-bgColor: bg-gray-200
-textColor: text-black
+bg_color: bg-gray-200
+text_color: text-black
 title: Video Test
 ---
 <video src="{}" controls></video>"#,
@@ -381,5 +402,75 @@ title: Video Test
             video_regex.is_match(content),
             "Video tag is not properly formatted"
         );
+    }
+    #[test]
+    fn test_mermaid_block_conversion() {
+        let markdown = r#"---
+bg_color: bg-gray-200
+text_color: text-black
+title: Mermaid Test
+---
+```mermaid
+graph TD
+    A[Start] --> B[Process]
+    B --> C[End]
+```
+"#;
+
+        let result = parse_markdown_with_frontmatter(markdown, "/test/base").unwrap();
+        assert_eq!(result.len(), 1);
+        let content = &result[0].content;
+
+        // Check that the mermaid block is wrapped in a div with class "mermaid"
+        assert!(content.contains("<div class=\"mermaid\">"));
+        assert!(content.contains("graph TD"));
+        // assert!(content.contains("A[Start] --> B[Process]"));
+        // assert!(content.contains("B --> C[End]"));
+        assert!(content.contains("</div>"));
+
+        // Ensure no <code> or <pre> tags are present for mermaid blocks
+        assert!(!content.contains("<code"));
+        assert!(!content.contains("<pre"));
+    }
+
+    #[test]
+    fn test_mermaid_with_other_fenced_blocks() {
+        let markdown = r#"---
+bg_color: bg-white
+text_color: text-black
+title: Mixed Code Blocks
+---
+```mermaid
+pie
+    title Sample Pie Chart
+    "Category A": 40
+    "Category B": 30
+    "Category C": 30
+```
+
+```javascript
+console.log('Hello World');
+```
+
+```python
+print("Hello World")
+```
+"#;
+
+        let result = parse_markdown_with_frontmatter(markdown, "/test/base").unwrap();
+        assert_eq!(result.len(), 1);
+        let content = &result[0].content;
+
+        // Only one mermaid div should exist
+        assert_eq!(content.matches("<div class=\"mermaid\">").count(), 1);
+        assert_eq!(content.matches("</div>").count(), 1); // Assuming only mermaid adds this
+
+        // JavaScript and Python blocks are rendered normally
+        assert!(content.contains("<code class=\"language-javascript\""));
+        assert!(content.contains("<code class=\"language-python\""));
+
+        // Mermaid content should be preserved as plain text inside the div
+        assert!(content.contains("pie"));
+        assert!(content.contains("title Sample Pie Chart"));
     }
 }
