@@ -1,4 +1,6 @@
 <script lang="ts">
+	// import { renderMermaidDiagrams } from '$lib/render_mermaid';
+
 	interface Props {
 		id: string;
 		bgColor: string;
@@ -8,12 +10,18 @@
 	}
 
 	let { id, bgColor, textColor, title, content }: Props = $props();
+
+	// $effect(() => {
+	// 	renderMermaidDiagrams();
+	// });
 </script>
 
-<section {id} class="h-screen w-full {bgColor}">
-	<div class="h-screen w-full px-24">
-		<div class="flex h-screen flex-col items-center justify-center">
-			<article class="prose lg:prose-xl prose-invert {textColor}">{@html content}</article>
-		</div>
+<section {id} class="h-screen w-full {bgColor} overflow-hidden">
+	<div class="flex h-screen w-full flex-col items-center justify-center px-24 py-10">
+		<article
+			class="prose lg:prose-xl prose-invert flex h-full w-full flex-col justify-center {textColor}"
+		>
+			{@html content}
+		</article>
 	</div>
 </section>

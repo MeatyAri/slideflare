@@ -1,4 +1,42 @@
 ---
+bg_color: bg-indigo-700
+text_color: text-white text-center
+title: Model Evaluation
+---
+
+# Mermaid Graph Example
+
+<div class="mermaid">
+graph TD
+    A[Data] --> B[Preprocessing]
+    B --> C[Model Training]
+    C --> D[Validation]
+    D --> E{Accuracy > 90%?}
+    E -->|Yes| F[Deploy Model]
+    E -->|No| G[Adjust Parameters]
+    G --> C
+</div>
+
+---
+bg_color: bg-pink-600
+text_color: text-white text-center
+title: Decision Tree Example
+---
+
+# yo
+
+## hey sup,
+
+
+<div class="mermaid">
+pie showData
+    title Distribution of Data Points
+    "Category A": 42.86
+    "Category B": 28.57
+    "Category C": 28.57
+</div>
+
+---
 bg_color: bg-blue-800
 text_color: text-white
 title: Introduction to Machine Learning

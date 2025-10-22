@@ -22,4 +22,12 @@
 	video {
 		@apply rounded-3xl;
 	}
+
+	.mermaid {
+		@apply flex h-full w-full items-center justify-center;
+	}
+
+	.mermaid-diagram {
+		@apply w-full;
+	}
 }

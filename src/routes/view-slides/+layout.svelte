@@ -2,8 +2,16 @@
 	import { onMount } from 'svelte';
 	import type { Snippet } from 'svelte';
 	import { shared } from './shared.svelte';
+	import { listen } from '@tauri-apps/api/event';
+	import { renderMermaidDiagrams } from '$lib/render_mermaid';
 
 	let { children }: { children: Snippet } = $props();
+
+	listen('markdown-updated', async (event: any) => {
+		// Sleep for 100ms to allow DOM updates before rendering diagrams
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		renderMermaidDiagrams();
+	});
 
 	onMount(() => {
 		/**

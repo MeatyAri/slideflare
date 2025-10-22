@@ -6,6 +6,7 @@
 - [ ] add shiki magic move
 - [ ] add themes, use JSON to create themes
 - [ ] add AI
+  - [ ] check [mermaid-fixer](https://crates.io/crates/mermaid-fixer) to build correct mermaid graphs using AI
 - [ ] add better styling
 - [ ] add easy way to convert slides from other platforms to slideflare:
   - [ ] get the pdf output of ther platforms and convert them to slideflare markdown using mistral OCR or other OCR tools that support images (mistral takes screenshots of the things that are not convertable to markdown)
