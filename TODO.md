@@ -1,5 +1,10 @@
 # TODO:
 
+- [ ] fix the lowercase/capital s on the program title
+- [ ] add an error screen for when the syntax is note correct
+  - [ ] make sure it displays the error when opening new slides
+  - [ ] make sure it displays an error pop up on the opened slide when editing
+- [ ] run tests on building release
 - [ ] add multipart slides
 - [ ] add mermaid diagrams
 - [ ] add shiki magic move
@@ -32,6 +37,7 @@
 
 # Later
 
+- [ ] add a help menu
 - add convert to pdf
 - add custom code component
 
