@@ -1,6 +1,5 @@
 # TODO:
 
-- [ ] fix the lowercase/capital s on the program title
 - [ ] add an error screen for when the syntax is note correct
   - [ ] make sure it displays the error when opening new slides
   - [ ] make sure it displays an error pop up on the opened slide when editing
@@ -43,6 +42,7 @@
 
 # Done
 
+- [x] fix the lowercase/capital s on the program title
 - [x] write a better readme
 - [x] fix the licensing
 - add [tailwindcss-typography](https://github.com/tailwindlabs/tailwindcss-typography) to style the html parsed from the markdown
