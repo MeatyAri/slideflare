@@ -4,6 +4,8 @@
   - [ ] make sure it displays the error when opening new slides
   - [ ] make sure it displays an error pop up on the opened slide when editing
 - [ ] run tests on building release
+- [ ] add easy to use fonts support
+- [ ] add easy to use rtl support
 - [ ] add multipart slides
 - [ ] add mermaid diagrams
 - [ ] add shiki magic move
