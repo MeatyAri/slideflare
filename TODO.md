@@ -4,6 +4,9 @@
   - [ ] make sure it displays the error when opening new slides
   - [ ] make sure it displays an error pop up on the opened slide when editing
 - [ ] run tests on building release
+- [ ] fix jumping on the first slide after an edit
+  - possible solution: prevent scroll events that are not caused by the user
+  - possible solution: scroll to the current slide on scroll events that are not caused by the user
 - [ ] add easy to use fonts support
 - [ ] add easy to use rtl support
 - [ ] add multipart slides
