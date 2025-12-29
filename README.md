@@ -17,6 +17,8 @@
 
 ---
 
+![Slideflare Demo](./examples/images/slideflare.webp)
+
 ## ✨ Features
 
 ### 🔥 **Performance First**
