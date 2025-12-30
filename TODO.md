@@ -33,11 +33,6 @@
 # Testing:
 
 - [ ] test the examples provided in the readme
-- [x] handle image/video paths correctly
-  - [x] image
-  - [x] video
-  - [x] fix handling of absolute paths
-  - [x] add proper styling to images/videos
 
 # Later
 
@@ -61,3 +56,8 @@
 - fixed file watcher and termination logic
 - on resize scroll to the active slide with no animation (to keep it persistent when changing resolution or window size)
 - make sure same file won't get processed twice, used a non-cryptographic hash function
+- [x] handle image/video paths correctly
+  - [x] image
+  - [x] video
+  - [x] fix handling of absolute paths
+  - [x] add proper styling to images/videos

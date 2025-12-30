@@ -263,15 +263,15 @@ mod tests {
     #[test]
     fn test_parsing() {
         let input = r#"---
-bgColor: bg-blue-500
-textColor: text-white
+bg_color: bg-blue-500
+text_color: text-white
 title: Introduction to JavaScript
 ---
 JavaScript is a versatile programming language used for web development.
 
 ---
-bgColor: bg-green-500
-textColor: text-white
+bg_color: bg-green-500
+text_color: text-white
 title: Variables and Data Types
 ---
 JavaScript supports various data types including strings, numbers, and objects.
@@ -279,8 +279,8 @@ JavaScript supports various data types including strings, numbers, and objects.
 The area of a circle is $A = \pi r^2$.
 
 ---
-bgColor: bg-red-500
-textColor: text-white
+bg_color: bg-red-500
+text_color: text-white
 title: Functions
 ---
 Functions are reusable blocks of code that perform a specific task.
@@ -307,8 +307,8 @@ $f(x) = \int_{-\infty}^{\infty} \hat{f}(\\xi) e^{2 \\pi i \\xi x} d\\xi$
 
         let markdown = format!(
             r#"---
-bgColor: bg-gray-200
-textColor: text-black
+bg_color: bg-gray-200
+text_color: text-black
 title: Image Test
 ---
 ![]({})"#,
@@ -349,8 +349,8 @@ title: Image Test
 
         let markdown = format!(
             r#"---
-bgColor: bg-gray-200
-textColor: text-black
+bg_color: bg-gray-200
+text_color: text-black
 title: Video Test
 ---
 <video src="{}" controls></video>"#,
