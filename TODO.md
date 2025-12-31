@@ -29,6 +29,7 @@
 
 - [ ] complete the documentation
 - [ ] write more tests and move them into a separate folder
+- [ ] Do not open links inside the app, open them in the browser, (ask for confirmation before opening the link)
 
 # Testing:
 
