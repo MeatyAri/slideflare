@@ -4,3 +4,11 @@ pnpm-lock.yaml
 yarn.lock
 bun.lock
 bun.lockb
+
+# Miscellaneous
+/static/
+/examples/
+
+# Tauri
+cargo.lock
+src-tauri/target/

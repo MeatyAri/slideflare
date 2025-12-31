@@ -5,6 +5,7 @@ This directory is meant to contain video files that can be referenced in your Sl
 ### Supported Formats
 
 SlideFlare supports the following video formats:
+
 - **MP4** (recommended) - `.mp4`
 - **WebM** - `.webm`
 - **AVI** - `.avi`
@@ -16,34 +17,38 @@ SlideFlare supports the following video formats:
 In your markdown slides, you can reference videos like this:
 
 #### Basic Video
+
 ```html
 <video controls width="600">
-  <source src="./videos/my-video.mp4" type="video/mp4">
+  <source src="./videos/my-video.mp4" type="video/mp4" />
   Your browser does not support the video tag.
 </video>
 ```
 
 #### Multiple Format Support
+
 ```html
 <video controls width="600" height="400">
-  <source src="./videos/presentation.mp4" type="video/mp4">
-  <source src="./videos/presentation.webm" type="video/webm">
-  <source src="./videos/presentation.ogv" type="video/ogg">
+  <source src="./videos/presentation.mp4" type="video/mp4" />
+  <source src="./videos/presentation.webm" type="video/webm" />
+  <source src="./videos/presentation.ogv" type="video/ogg" />
   Your browser does not support the video tag.
 </video>
 ```
 
 #### Autoplay with Mute
+
 ```html
 <video autoplay muted loop width="500">
-  <source src="./videos/background-loop.mp4" type="video/mp4">
+  <source src="./videos/background-loop.mp4" type="video/mp4" />
 </video>
 ```
 
 #### With Poster Image
+
 ```html
 <video controls poster="../images/video-thumbnail.jpg" width="600">
-  <source src="./videos/main-content.mp4" type="video/mp4">
+  <source src="./videos/main-content.mp4" type="video/mp4" />
 </video>
 ```
 

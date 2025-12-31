@@ -9,7 +9,7 @@
 [![Rust](https://img.shields.io/badge/built%20with-Rust-orange.svg)](https://www.rust-lang.org/)
 [![Svelte](https://img.shields.io/badge/frontend-Svelte-red.svg)](https://svelte.dev/)
 
-*Build and share beautiful slides effortlessly with markdown, math, multimedia, and more*
+_Build and share beautiful slides effortlessly with markdown, math, multimedia, and more_
 
 [📥 Download](#installation) • [📖 Documentation](https://github.com/MeatyAri/slideflare/wiki) • [🎯 Examples](#examples) • [🚀 Quick Start](#quick-start)
 
@@ -22,34 +22,40 @@
 ## ✨ Features
 
 ### 🔥 **Performance First**
+
 - **Rust-powered backend** for lightning-fast rendering and file processing
 - **Optimized slide parsing** with efficient caching and hot-reloading
 - **Minimal resource usage** - perfect for resource-constrained environments
 
 ### 📝 **Markdown Native**
+
 - Write presentations in **pure Markdown** with YAML frontmatter
 - **Live preview** with instant updates as you type
 - **Syntax highlighting** for code blocks
 - **GitHub Flavored Markdown** support
 
 ### 🧮 **Mathematical Excellence**
+
 - **LaTeX math rendering** with pure Rust implementation converting to MathML via pulldown-latex
 - Inline math: `$E = mc^2$` and display math: `$$\int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}$$`
 - **Mathematical symbols** and complex equations
 
 ### 🎨 **Rich Media Support**
+
 - **Images**: PNG, JPG, GIF, SVG, WebP
 - **Videos**: MP4, WebM, AVI, MOV, OGV with autoplay and controls
 - **Custom styling** with Tailwind CSS classes
 - **Responsive design** that adapts to any screen size
 
 ### 🎯 **Developer Experience**
+
 - **Drag & drop** markdown files to instantly create presentations
 - **Hot reload** during development with `bun run tauri dev`
 - **Cross-platform** - Windows, macOS, and Linux support
 - **Extensible** architecture for custom themes and plugins
 
 ### 🚀 **Coming Soon: AI-Powered**
+
 - **Smart conversion** from PowerPoint and PDF to SlideFlare format
 - **AI-assisted slide creation** and content optimization
 - **OCR integration** for extracting content from existing presentations
@@ -60,6 +66,8 @@
 ### 1. Create Your First Slide
 
 Create a markdown file `my-presentation.md`:
+
+<!-- prettier-ignore-start -->
 
 <pre>
 ---
@@ -109,6 +117,8 @@ And inline math works too: $\sum_{i=1}^n i = \frac{n(n+1)}{2}$
 ---
 </pre>
 
+<!-- prettier-ignore-end -->
+
 ### 2. Launch SlideFlare
 
 Simply **drag and drop** your markdown file into the SlideFlare application, and watch your presentation come to life!
@@ -124,17 +134,20 @@ Visit our [releases page](https://github.com/MeatyAri/slideflare/releases) to do
 - **Windows**: `slideflare-windows-x64.exe`
 
 ### Linux & macOS
+
 ```bash
 chmod +x slideflare
 ./slideflare
 ```
 
 ### Windows
+
 Double-click the downloaded executable to run.
 
 ### Build from Source
 
 **Prerequisites:**
+
 - [Rust](https://rustup.rs/) (latest stable)
 - [Bun](https://bun.sh/) or [Node.js](https://nodejs.org/) 18+
 - [Tauri Prerequisites](https://v2.tauri.app/start/prerequisites/)
@@ -158,6 +171,8 @@ bun run tauri build
 
 ### Basic Slide Structure
 
+<!-- prettier-ignore-start -->
+
 ```markdown
 ---
 bg_color: bg-slate-900
@@ -180,9 +195,12 @@ More content...
 # Next slide starts here
 ```
 
+<!-- prettier-ignore-end -->
+
 ### Advanced Features
 
 #### Mathematical Expressions
+
 ```markdown
 # Physics Formula
 
@@ -190,12 +208,14 @@ Einstein's mass-energy equivalence:
 $$E = mc^2$$
 
 Where:
+
 - $E$ = energy
 - $m$ = mass
 - $c$ = speed of light
 ```
 
 #### Media Integration
+
 ```markdown
 # Rich Media
 
@@ -207,6 +227,7 @@ Where:
 ```
 
 #### Custom Styling
+
 ```markdown
 ---
 bg_color: bg-gradient-to-r from-cyan-500 to-blue-500
@@ -269,18 +290,21 @@ Please read our contributing guidelines and code of conduct before contributing.
 ## 🔮 Roadmap
 
 ### Version 0.2.0
+
 - [ ] **AI-powered slide conversion** from PowerPoint/PDF
 - [ ] **Mermaid diagram support** for flowcharts and graphs
 - [ ] **Shiki Magic Move** for animated code transitions
 - [ ] **Custom themes** with JSON configuration
 
 ### Version 0.3.0
+
 - [ ] **Multipart slides** for complex layouts
 - [ ] **Performance optimizations** with parallel processing
 - [ ] **PDF export** functionality
 - [ ] **Online sharing** with generated links
 
 ### Future Versions
+
 - [ ] **Collaborative editing** in real-time
 - [ ] **Plugin system** for extensibility
 - [ ] **Mobile app** for presentation control
@@ -290,6 +314,8 @@ Please read our contributing guidelines and code of conduct before contributing.
 
 SlideFlare uses standard Markdown with YAML frontmatter:
 
+<!-- prettier-ignore-start -->
+
 ```yaml
 ---
 bg_color: bg-blue-600        # Tailwind background class
@@ -298,11 +324,12 @@ title: Slide Title           # Optional slide title
 layout: center               # Optional layout (center, default)
 transition: fade             # Optional transition effect
 ---
-
 # Your markdown content here
 
 Regular markdown syntax with all the features you love.
 ```
+
+<!-- prettier-ignore-end -->
 
 ## 🤝 Community
 
@@ -328,6 +355,6 @@ This project is licensed under the **Apache 2.0 License** - see the [LICENSE](LI
 
 **Made with ❤️ and ☕ by [Meatyari](https://github.com/MeatyAri)**
 
-*Star ⭐ this repo if you find SlideFlare useful!*
+_Star ⭐ this repo if you find SlideFlare useful!_
 
 </div>

@@ -1,26 +1,26 @@
 <script lang="ts">
-	import NavBar from './NavBar.svelte';
-	import Slide from './Slide.svelte';
-	import { webview } from '@tauri-apps/api';
-	import { shared } from './shared.svelte';
-	import { onDestroy } from 'svelte';
+  import NavBar from './NavBar.svelte';
+  import Slide from './Slide.svelte';
+  import { webview } from '@tauri-apps/api';
+  import { shared } from './shared.svelte';
+  import { onDestroy } from 'svelte';
 
-	onDestroy(() => {
-		// terminate the watcher and refresh the page when exiting the slides
-		webview.getCurrentWebview().emit('terminate-event');
-		window.location.reload();
-	});
+  onDestroy(() => {
+    // terminate the watcher and refresh the page when exiting the slides
+    webview.getCurrentWebview().emit('terminate-event');
+    window.location.reload();
+  });
 </script>
 
 <svelte:head>
-	<script src="../tailwind.min.js"></script>
-	<!-- Include the Stylesheet for math -->
-	<!-- <link
+  <script src="../tailwind.min.js"></script>
+  <!-- Include the Stylesheet for math -->
+  <!-- <link
 		rel="stylesheet"
 		href="https://cdn.jsdelivr.net/gh/carloskiki/pulldown-latex@latest/styles.min.css"
 	/> -->
-	<!-- Include the Fonts for math -->
-	<!-- <link
+  <!-- Include the Fonts for math -->
+  <!-- <link
 		rel="preload"
 		href="https://cdn.jsdelivr.net/gh/carloskiki/pulldown-latex@latest/font/"
 		as="font"
@@ -31,13 +31,13 @@
 <NavBar />
 
 <main class="flex flex-col items-center justify-center select-none">
-	{#each shared.slides as slide, index}
-		<Slide
-			id={String(index)}
-			bgColor={slide.bg_color}
-			textColor={slide.text_color}
-			title={slide.title}
-			content={slide.content}
-		/>
-	{/each}
+  {#each shared.slides as slide, index (index)}
+    <Slide
+      id={String(index)}
+      bgColor={slide.bg_color}
+      textColor={slide.text_color}
+      title={slide.title}
+      content={slide.content}
+    />
+  {/each}
 </main>
