@@ -7,21 +7,44 @@ use twox_hash::XxHash64;
 use negahban::{EventType, HookType, Negahban};
 use tauri::{Emitter, Listener};
 
+use crate::incremental::{
+    compute_slide_metadata, create_slide_change_events, detect_slide_changes, SlideChangeEvent,
+};
 use crate::parser::parse_markdown_with_frontmatter;
+
+/// State for incremental slide processing
+#[derive(Debug)]
+struct IncrementalState {
+    last_file_hash: u64,
+    last_slide_metadata: Vec<crate::incremental::SlideMetadata>,
+    last_content: String,
+}
+
+impl IncrementalState {
+    fn new() -> Self {
+        Self {
+            last_file_hash: 0,
+            last_slide_metadata: Vec::new(),
+            last_content: String::new(),
+        }
+    }
+}
 
 fn send_new_file(
     window: &tauri::Window,
     file_path: &str,
-    last_hash: &std::sync::Arc<std::sync::Mutex<u64>>,
+    incremental_state: &std::sync::Arc<std::sync::Mutex<IncrementalState>>,
 ) -> Result<(), Box<dyn Error>> {
     if let Ok(content) = fs::read_to_string(file_path) {
         // Check if the content has changed
-        let hash = XxHash64::oneshot(42, content.as_bytes());
-        let mut last_hash_lock = last_hash.lock().unwrap();
-        if *last_hash_lock == hash {
+        let file_hash = XxHash64::oneshot(42, content.as_bytes());
+
+        let mut state_lock = incremental_state.lock().unwrap();
+
+        // If file hasn't changed, no action needed
+        if state_lock.last_file_hash == file_hash {
             return Ok(());
         }
-        *last_hash_lock = hash;
 
         // Get the directory of the markdown file for relative path resolution
         let base_dir = PathBuf::from(file_path)
@@ -30,16 +53,52 @@ fn send_new_file(
             .to_string_lossy()
             .to_string();
 
-        // Parse the markdown file with frontmatter
-        let res = parse_markdown_with_frontmatter(&content, &base_dir)?;
+        // For first load, use legacy full processing
+        if state_lock.last_content.is_empty() {
+            let res = parse_markdown_with_frontmatter(&content, &base_dir)?;
+            let json_string = serde_json::to_string(&res)?;
 
-        // Convert to JSON string
-        let json_string = serde_json::to_string(&res)?;
+            window
+                .emit("markdown-updated", json_string)
+                .expect("Failed to emit event");
+        } else {
+            // Use incremental processing
+            let new_metadata = compute_slide_metadata(&content)?;
+            let old_hashes: Vec<u64> = state_lock
+                .last_slide_metadata
+                .iter()
+                .map(|m| m.hash)
+                .collect();
+            let new_hashes: Vec<u64> = new_metadata.iter().map(|m| m.hash).collect();
 
-        // Emit the content to the frontend
-        window
-            .emit("markdown-updated", json_string)
-            .expect("Failed to emit event");
+            let slide_changes = detect_slide_changes(&old_hashes, &new_hashes);
+
+            if !slide_changes.is_empty() {
+                let change_events = create_slide_change_events(
+                    &state_lock.last_content,
+                    &content,
+                    &slide_changes,
+                    &base_dir,
+                )?;
+
+                let slide_change_event = SlideChangeEvent {
+                    changes: change_events,
+                    file_hash,
+                };
+
+                let json_string = serde_json::to_string(&slide_change_event)?;
+
+                window
+                    .emit("slide-changed", json_string)
+                    .expect("Failed to emit slide change event");
+            }
+        }
+
+        // Update state
+        let new_metadata = compute_slide_metadata(&content)?;
+        state_lock.last_file_hash = file_hash;
+        state_lock.last_slide_metadata = new_metadata;
+        state_lock.last_content = content;
 
         return Ok(());
     }
@@ -68,12 +127,12 @@ pub async fn start_file_watcher(window: tauri::Window, file_path: String) {
         .set_title(&format!("SlideFlare: {}", title))
         .expect("Failed to set window title");
 
-    // create a shared variable to store the last hash
-    let last_hash = Arc::new(Mutex::new(0_u64));
-    let last_hash_clone = Arc::clone(&last_hash);
+    // create a shared state for incremental processing
+    let incremental_state = Arc::new(Mutex::new(IncrementalState::new()));
+    let state_clone = Arc::clone(&incremental_state);
 
     // Send the initial content of the file
-    let _ = send_new_file(&window, &file_path, &last_hash_clone);
+    let _ = send_new_file(&window, &file_path, &state_clone);
 
     let terminate = Arc::new(Mutex::new(false));
     let terminate_clone = Arc::clone(&terminate);
@@ -95,7 +154,7 @@ pub async fn start_file_watcher(window: tauri::Window, file_path: String) {
             }
 
             if event.kind == EventType::Modify {
-                let _ = send_new_file(&window, &file_path, &last_hash_clone);
+                let _ = send_new_file(&window, &file_path, &state_clone);
             }
 
             ControlFlow::Continue(())

@@ -73,8 +73,32 @@ pub fn parse_markdown_with_frontmatter(
     Ok(cards)
 }
 
+/// Parse a single slide section (for incremental processing)
+pub fn parse_individual_slide(section: &str, base_dir: &str) -> Result<Slide, Box<dyn Error>> {
+    let matter = Matter::<YAML>::new();
+    let result = matter.parse::<Frontmatter>(section)?;
+
+    // Convert the YAML data (Pod) to a proper map
+    let frontmatter = match result.data.as_ref() {
+        Some(data) => data,
+        None => &Frontmatter::default(),
+    };
+
+    // Process the content part with Markdown and LaTeX support
+    let content = process_markdown_with_latex(&result.content, base_dir);
+
+    let slide = Slide {
+        content,
+        bg_color: frontmatter.bg_color.clone().unwrap_or_default(),
+        text_color: frontmatter.text_color.clone().unwrap_or_default(),
+        title: frontmatter.title.clone().unwrap_or_default(),
+    };
+
+    Ok(slide)
+}
+
 // Split content into multiple sections, each containing frontmatter and markdown content
-fn split_into_sections(content: &str) -> Vec<String> {
+pub fn split_into_sections(content: &str) -> Vec<String> {
     // First, normalize line endings to ensure consistent processing
     let mut content = content.replace("\r\n", "\n");
 

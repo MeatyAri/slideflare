@@ -1,12 +1,13 @@
 # TODO:
 
+- [ ] replace temp incremental.rs implementations with imara-diff
+- [ ] Performance Bug (watcher.rs:66 & 94): compute_slide_metadata() called twice, causing unnecessary double parsing
 - [ ] add an error screen for when the syntax is note correct
   - [ ] make sure it displays the error when opening new slides
   - [ ] make sure it displays an error pop up on the opened slide when editing
 - [ ] run tests on building release
 - [ ] fix jumping on the first slide after an edit
-  - possible solution: prevent scroll events that are not caused by the user
-  - possible solution: scroll to the current slide on scroll events that are not caused by the user
+  - use the hash to know what the correct slide is
 - [ ] add easy to use fonts support
 - [ ] add easy to use rtl support
 - [ ] add multipart slides
@@ -30,6 +31,7 @@
 - [ ] complete the documentation
 - [ ] write more tests and move them into a separate folder
 - [ ] Do not open links inside the app, open them in the browser, (ask for confirmation before opening the link)
+- [ ] add to AUR
 
 # Testing:
 
