@@ -64,12 +64,12 @@ fn send_new_file(
         } else {
             // Use incremental processing
             let new_metadata = compute_slide_metadata(&content)?;
-            let old_hashes: Vec<u64> = state_lock
+            let old_hashes: Vec<u32> = state_lock
                 .last_slide_metadata
                 .iter()
                 .map(|m| m.hash)
                 .collect();
-            let new_hashes: Vec<u64> = new_metadata.iter().map(|m| m.hash).collect();
+            let new_hashes: Vec<u32> = new_metadata.iter().map(|m| m.hash).collect();
 
             let slide_changes = detect_slide_changes(&old_hashes, &new_hashes);
 

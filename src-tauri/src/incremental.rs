@@ -2,14 +2,14 @@
 // TODO: Replace with imara-diff once we get TokenSource working
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-use twox_hash::XxHash64;
+use twox_hash::XxHash32;
 
 use super::parser::{parse_individual_slide, Slide};
 
 /// Metadata for tracking slide changes
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct SlideMetadata {
-    pub hash: u64,
+    pub hash: u32,
     pub index: usize,
 }
 
@@ -22,13 +22,13 @@ pub enum SlideChangeType {
     },
     Modified {
         index: usize,
-        old_hash: u64,
-        new_hash: u64,
+        old_hash: u32,
+        new_hash: u32,
         slide: Slide,
     },
     Removed {
         index: usize,
-        old_hash: u64,
+        old_hash: u32,
     },
 }
 
@@ -37,14 +37,6 @@ pub enum SlideChangeType {
 pub struct SlideChangeEvent {
     pub changes: Vec<SlideChangeType>,
     pub file_hash: u64,
-}
-
-/// Result of slide change detection
-#[derive(Debug)]
-pub struct SlideChangeDetection {
-    pub old_metadata: Vec<SlideMetadata>,
-    pub new_metadata: Vec<SlideMetadata>,
-    pub changes: Vec<SlideChange>,
 }
 
 /// Internal representation of slide changes
@@ -56,9 +48,9 @@ pub enum SlideChange {
 }
 
 /// Compute hash for a single slide's raw content
-/// Uses the same XxHash64 algorithm and seed as file hashing
-pub fn compute_slide_hash(slide_content: &str) -> u64 {
-    XxHash64::oneshot(42, slide_content.as_bytes())
+/// Uses the same XxHash32 algorithm and seed as file hashing
+pub fn compute_slide_hash(slide_content: &str) -> u32 {
+    XxHash32::oneshot(42, slide_content.as_bytes())
 }
 
 /// Split content into sections with indices
@@ -83,12 +75,12 @@ pub fn compute_slide_metadata(content: &str) -> Result<Vec<SlideMetadata>, Box<d
 
 /// Detect slide changes using a simple diff algorithm
 /// TODO: Replace with imara-diff Myers algorithm once TokenSource is resolved
-pub fn detect_slide_changes(old_hashes: &[u64], new_hashes: &[u64]) -> Vec<SlideChange> {
+pub fn detect_slide_changes(old_hashes: &[u32], new_hashes: &[u32]) -> Vec<SlideChange> {
     let mut changes = Vec::new();
 
     // Simple algorithm: find which hashes are present in old vs new
-    let mut old_hashes_set: std::collections::HashSet<_> = old_hashes.iter().collect();
-    let mut new_hashes_set: std::collections::HashSet<_> = new_hashes.iter().collect();
+    let old_hashes_set: std::collections::HashSet<_> = old_hashes.iter().collect();
+    let new_hashes_set: std::collections::HashSet<_> = new_hashes.iter().collect();
 
     // Find removed slides (in old but not in new)
     for (i, &hash) in old_hashes.iter().enumerate() {
@@ -330,8 +322,8 @@ Content 3"#;
         let old_metadata = compute_slide_metadata(old_content).unwrap();
         let new_metadata = compute_slide_metadata(new_content).unwrap();
 
-        let old_hashes: Vec<u64> = old_metadata.iter().map(|m| m.hash).collect();
-        let new_hashes: Vec<u64> = new_metadata.iter().map(|m| m.hash).collect();
+        let old_hashes: Vec<u32> = old_metadata.iter().map(|m| m.hash).collect();
+        let new_hashes: Vec<u32> = new_metadata.iter().map(|m| m.hash).collect();
 
         // 2. Detect changes
         let changes = detect_slide_changes(&old_hashes, &new_hashes);
@@ -373,11 +365,11 @@ Content 2"#;
 
         // 1. Get initial metadata
         let initial_metadata = compute_slide_metadata(initial_content).unwrap();
-        let initial_hashes: Vec<u64> = initial_metadata.iter().map(|m| m.hash).collect();
+        let initial_hashes: Vec<u32> = initial_metadata.iter().map(|m| m.hash).collect();
 
         // 2. Get updated metadata
         let updated_metadata = compute_slide_metadata(updated_content).unwrap();
-        let updated_hashes: Vec<u64> = updated_metadata.iter().map(|m| m.hash).collect();
+        let updated_hashes: Vec<u32> = updated_metadata.iter().map(|m| m.hash).collect();
 
         // 3. Detect changes
         let _changes = detect_slide_changes(&initial_hashes, &updated_hashes);
