@@ -8,7 +8,8 @@ use negahban::{EventType, HookType, Negahban};
 use tauri::{Emitter, Listener};
 
 use crate::incremental::{
-    compute_slide_metadata, create_slide_change_events, detect_slide_changes, SlideChangeEvent,
+    compute_slide_hashes, create_slide_change_events, detect_slide_changes, SlideChangeEvent,
+    VecSlideHashes,
 };
 use crate::parser::parse_markdown_with_frontmatter;
 
@@ -16,7 +17,7 @@ use crate::parser::parse_markdown_with_frontmatter;
 #[derive(Debug)]
 struct IncrementalState {
     last_file_hash: u64,
-    last_slide_metadata: Vec<crate::incremental::SlideMetadata>,
+    last_slide_hashes: VecSlideHashes,
     last_content: String,
 }
 
@@ -24,7 +25,7 @@ impl IncrementalState {
     fn new() -> Self {
         Self {
             last_file_hash: 0,
-            last_slide_metadata: Vec::new(),
+            last_slide_hashes: VecSlideHashes::new(Vec::new()),
             last_content: String::new(),
         }
     }
@@ -33,7 +34,7 @@ impl IncrementalState {
 fn send_new_file(
     window: &tauri::Window,
     file_path: &str,
-    incremental_state: &std::sync::Arc<std::sync::Mutex<IncrementalState>>,
+    incremental_state: &Arc<Mutex<IncrementalState>>,
 ) -> Result<(), Box<dyn Error>> {
     if let Ok(content) = fs::read_to_string(file_path) {
         // Check if the content has changed
@@ -63,21 +64,14 @@ fn send_new_file(
                 .expect("Failed to emit event");
         } else {
             // Use incremental processing
-            let new_metadata = compute_slide_metadata(&content)?;
-            let old_hashes: Vec<u32> = state_lock
-                .last_slide_metadata
-                .iter()
-                .map(|m| m.hash)
-                .collect();
-            let new_hashes: Vec<u32> = new_metadata.iter().map(|m| m.hash).collect();
+            let new_hashes = compute_slide_hashes(&content)?;
+            let slide_changes = detect_slide_changes(&state_lock.last_slide_hashes, &new_hashes);
 
-            let slide_changes = detect_slide_changes(&old_hashes, &new_hashes);
-
-            if !slide_changes.is_empty() {
+            if slide_changes.hunks().next().is_some() {
                 let change_events = create_slide_change_events(
                     &state_lock.last_content,
                     &content,
-                    &slide_changes,
+                    slide_changes,
                     &base_dir,
                 )?;
 
@@ -95,9 +89,9 @@ fn send_new_file(
         }
 
         // Update state
-        let new_metadata = compute_slide_metadata(&content)?;
+        let new_metadata = compute_slide_hashes(&content)?;
         state_lock.last_file_hash = file_hash;
-        state_lock.last_slide_metadata = new_metadata;
+        state_lock.last_slide_hashes = new_metadata;
         state_lock.last_content = content;
 
         return Ok(());
