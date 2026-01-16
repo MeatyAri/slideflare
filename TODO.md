@@ -1,13 +1,10 @@
 # TODO:
 
-- [ ] Performance Bug (watcher.rs:66 & 94): compute_slide_metadata() called twice, causing unnecessary double parsing
 - [ ] Update the incremental.rs tests
 - [ ] add an error screen for when the syntax is note correct
   - [ ] make sure it displays the error when opening new slides
   - [ ] make sure it displays an error pop up on the opened slide when editing
 - [ ] run tests on building release
-- [ ] fix jumping on the first slide after an edit
-  - use the hash to know what the correct slide is
 - [ ] add easy to use fonts support
 - [ ] add easy to use rtl support
 - [ ] add multipart slides
@@ -37,6 +34,9 @@
 
 - [ ] test the examples provided in the readme
 - [x] replace temp incremental.rs implementations with imara-diff
+- [x] Performance Bug (watcher.rs:66 & 94): compute_slide_hashes() called twice, causing unnecessary double parsing
+- [x] fix jumping on the first slide after an edit
+  - use the hash to know what the correct slide is
 
 # Later
 

@@ -45,6 +45,8 @@ fn send_new_file(
             return Ok(());
         }
 
+        let new_slide_hashes = compute_slide_hashes(&content)?;
+
         // Get the directory of the markdown file for relative path resolution
         let base_dir = PathBuf::from(file_path)
             .parent()
@@ -62,8 +64,8 @@ fn send_new_file(
                 .expect("Failed to emit event");
         } else {
             // Use incremental processing
-            let new_hashes = compute_slide_hashes(&content)?;
-            let slide_changes = detect_slide_changes(&state_lock.last_slide_hashes, &new_hashes);
+            let slide_changes =
+                detect_slide_changes(&state_lock.last_slide_hashes, &new_slide_hashes);
 
             if slide_changes.hunks().next().is_none() {
                 return Ok(());
@@ -88,9 +90,8 @@ fn send_new_file(
         }
 
         // Update state
-        let new_metadata = compute_slide_hashes(&content)?;
         state_lock.last_file_hash = file_hash;
-        state_lock.last_slide_hashes = new_metadata;
+        state_lock.last_slide_hashes = new_slide_hashes;
 
         return Ok(());
     }
