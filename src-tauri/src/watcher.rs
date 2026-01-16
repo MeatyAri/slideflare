@@ -18,15 +18,13 @@ use crate::parser::parse_markdown_with_frontmatter;
 struct IncrementalState {
     last_file_hash: u64,
     last_slide_hashes: VecSlideHashes,
-    last_content: String,
 }
 
 impl IncrementalState {
     fn new() -> Self {
         Self {
             last_file_hash: 0,
-            last_slide_hashes: VecSlideHashes::new(Vec::new()),
-            last_content: String::new(),
+            last_slide_hashes: VecSlideHashes::new(),
         }
     }
 }
@@ -55,7 +53,7 @@ fn send_new_file(
             .to_string();
 
         // For first load, use legacy full processing
-        if state_lock.last_content.is_empty() {
+        if state_lock.last_slide_hashes.data.is_empty() {
             let res = parse_markdown_with_frontmatter(&content, &base_dir)?;
             let json_string = serde_json::to_string(&res)?;
 
@@ -67,32 +65,32 @@ fn send_new_file(
             let new_hashes = compute_slide_hashes(&content)?;
             let slide_changes = detect_slide_changes(&state_lock.last_slide_hashes, &new_hashes);
 
-            if slide_changes.hunks().next().is_some() {
-                let change_events = create_slide_change_events(
-                    &state_lock.last_content,
-                    &content,
-                    slide_changes,
-                    &base_dir,
-                )?;
-
-                let slide_change_event = SlideChangeEvent {
-                    changes: change_events,
-                    file_hash,
-                };
-
-                let json_string = serde_json::to_string(&slide_change_event)?;
-
-                window
-                    .emit("slide-changed", json_string)
-                    .expect("Failed to emit slide change event");
+            if slide_changes.hunks().next().is_none() {
+                return Ok(());
             }
+
+            let change_events = create_slide_change_events(
+                &state_lock.last_slide_hashes,
+                &content,
+                slide_changes,
+                &base_dir,
+            )?;
+
+            let slide_change_event = SlideChangeEvent {
+                changes: change_events,
+            };
+
+            let json_string = serde_json::to_string(&slide_change_event)?;
+
+            window
+                .emit("slide-changed", json_string)
+                .expect("Failed to emit slide change event");
         }
 
         // Update state
         let new_metadata = compute_slide_hashes(&content)?;
         state_lock.last_file_hash = file_hash;
         state_lock.last_slide_hashes = new_metadata;
-        state_lock.last_content = content;
 
         return Ok(());
     }
@@ -123,10 +121,9 @@ pub async fn start_file_watcher(window: tauri::Window, file_path: String) {
 
     // create a shared state for incremental processing
     let incremental_state = Arc::new(Mutex::new(IncrementalState::new()));
-    let state_clone = Arc::clone(&incremental_state);
 
     // Send the initial content of the file
-    let _ = send_new_file(&window, &file_path, &state_clone);
+    let _ = send_new_file(&window, &file_path, &incremental_state);
 
     let terminate = Arc::new(Mutex::new(false));
     let terminate_clone = Arc::clone(&terminate);
@@ -148,7 +145,7 @@ pub async fn start_file_watcher(window: tauri::Window, file_path: String) {
             }
 
             if event.kind == EventType::Modify {
-                let _ = send_new_file(&window, &file_path, &state_clone);
+                let _ = send_new_file(&window, &file_path, &incremental_state);
             }
 
             ControlFlow::Continue(())

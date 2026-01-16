@@ -13,7 +13,6 @@ interface SlideChangeType {
 
 interface SlideChangeEvent {
   changes: SlideChangeType[];
-  file_hash: number;
 }
 
 interface SharedState {

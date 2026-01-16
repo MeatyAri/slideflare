@@ -5,20 +5,24 @@ use twox_hash::XxHash32;
 
 use super::parser::{parse_individual_slide, Slide};
 
-/// Metadata for tracking slide changes
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct SlideMetadata {
-    pub hash: u32,
-    pub index: usize,
-}
+// /// Metadata for tracking slide changes
+// #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+// pub struct SlideMetadata {
+//     pub hash: u32,
+//     pub index: usize,
+// }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Default)]
 pub struct VecSlideHashes {
-    data: Vec<u32>,
+    pub data: Vec<u32>,
 }
 
 impl VecSlideHashes {
-    pub fn new(data: Vec<u32>) -> Self {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn create_from(data: Vec<u32>) -> Self {
         VecSlideHashes { data }
     }
 }
@@ -47,7 +51,6 @@ pub enum SlideChangeType {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SlideChangeEvent {
     pub changes: Vec<SlideChangeType>,
-    pub file_hash: u64,
 }
 
 /// Compute hash for a single slide's raw content
@@ -86,7 +89,7 @@ pub fn compute_slide_hashes(content: &str) -> Result<VecSlideHashes, Box<dyn Err
         hashes.push(hash);
     }
 
-    Ok(VecSlideHashes::new(hashes))
+    Ok(VecSlideHashes::create_from(hashes))
 }
 
 pub fn detect_slide_changes(old_hashes: &VecSlideHashes, new_hashes: &VecSlideHashes) -> Diff {
@@ -96,25 +99,23 @@ pub fn detect_slide_changes(old_hashes: &VecSlideHashes, new_hashes: &VecSlideHa
 
 /// Parse only the slides that changed and create change events
 pub fn create_slide_change_events(
-    old_content: &str,
+    last_slide_hashes: &VecSlideHashes,
     new_content: &str,
     changes: Diff,
     base_dir: &str,
 ) -> Result<Vec<SlideChangeType>, Box<dyn Error>> {
     let mut change_events = Vec::new();
 
-    let old_sections = split_into_sections_with_indices(old_content);
     let new_sections = split_into_sections_with_indices(new_content);
 
     let mut index_adjustment: i32 = 0;
     for change in changes.hunks() {
         let before_len = change.before.len() as i32;
         for index in change.before {
-            if let Some((idx, section)) = old_sections.get(index as usize) {
-                let old_hash = compute_slide_hash(section);
+            if let Some(old_hash) = last_slide_hashes.data.get(index as usize) {
                 change_events.push(SlideChangeType::Removed {
-                    index: (*idx as i32 + index_adjustment) as usize,
-                    old_hash,
+                    index: (index as i32 + index_adjustment) as usize,
+                    old_hash: *old_hash,
                 });
             }
         }
