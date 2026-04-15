@@ -1,7 +1,6 @@
 # TODO:
 
-- [ ] Update the incremental.rs tests
-- [ ] add an error screen for when the syntax is note correct
+- [ ] add an error screen for when the syntax is not correct
   - [ ] make sure it displays the error when opening new slides
   - [ ] make sure it displays an error pop up on the opened slide when editing
 - [ ] run tests on building release
@@ -65,3 +64,4 @@
   - [x] video
   - [x] fix handling of absolute paths
   - [x] add proper styling to images/videos
+- [x] Update the incremental.rs tests

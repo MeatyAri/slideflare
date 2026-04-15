@@ -132,228 +132,466 @@ pub fn create_slide_change_events(
     Ok(change_events)
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-//     #[test]
-//     fn test_slide_hash_stability() {
-//         let content = r#"---
-// bg_color: bg-blue-500
-// text_color: text-white
-// title: Test Slide
-// ---
-// This is test content"#;
+    // ── helpers ──────────────────────────────────────────────────────────────
 
-//         let hash1 = compute_slide_hash(content);
-//         let hash2 = compute_slide_hash(content);
+    /// A minimal two-slide document used in several tests.
+    fn two_slide_doc() -> &'static str {
+        r#"---
+title: Slide 1
+---
+Content 1
 
-//         assert_eq!(hash1, hash2, "Same content should produce same hash");
-//     }
+---
+title: Slide 2
+---
+Content 2"#
+    }
 
-//     #[test]
-//     fn test_slide_hash_uniqueness() {
-//         let content1 = r#"---
-// bg_color: bg-blue-500
-// ---
-// Content 1"#;
+    // Collect all hunk ranges from a Diff into (before_start, before_end, after_start, after_end).
+    fn hunk_ranges(diff: &Diff) -> Vec<(u32, u32, u32, u32)> {
+        diff.hunks()
+            .map(|h| (h.before.start, h.before.end, h.after.start, h.after.end))
+            .collect()
+    }
 
-//         let content2 = r#"---
-// bg_color: bg-red-500
-// ---
-// Content 2"#;
+    // ── compute_slide_hash ───────────────────────────────────────────────────
 
-//         let hash1 = compute_slide_hash(content1);
-//         let hash2 = compute_slide_hash(content2);
+    #[test]
+    fn test_slide_hash_stability() {
+        let content = r#"---
+bg_color: bg-blue-500
+text_color: text-white
+title: Test Slide
+---
+This is test content"#;
 
-//         assert_ne!(
-//             hash1, hash2,
-//             "Different content should produce different hashes"
-//         );
-//     }
+        let hash1 = compute_slide_hash(content);
+        let hash2 = compute_slide_hash(content);
 
-//     #[test]
-//     fn test_compute_slide_metadata() {
-//         let content = r#"---
-// title: Slide 1
-// ---
-// Content 1
+        assert_eq!(hash1, hash2, "Same content should produce the same hash");
+    }
 
-// ---
-// title: Slide 2
-// ---
-// Content 2"#;
+    #[test]
+    fn test_slide_hash_uniqueness() {
+        let content1 = r#"---
+bg_color: bg-blue-500
+---
+Content 1"#;
 
-//         let metadata = compute_slide_metadata(content).unwrap();
-//         assert_eq!(metadata.len(), 2);
-//         assert_eq!(metadata[0].index, 0);
-//         assert_eq!(metadata[1].index, 1);
-//         assert_ne!(metadata[0].hash, metadata[1].hash);
-//     }
+        let content2 = r#"---
+bg_color: bg-red-500
+---
+Content 2"#;
 
-//     #[test]
-//     fn test_detect_slide_changes_added() {
-//         let old_hashes = VecSlideHashes::new(vec![11, 22]);
-//         let new_hashes = VecSlideHashes::new(vec![22, 11]);
+        assert_ne!(
+            compute_slide_hash(content1),
+            compute_slide_hash(content2),
+            "Different content should produce different hashes"
+        );
+    }
 
-//         let diff = detect_slide_changes(&old_hashes, &new_hashes);
-//         let changes = diff.hunks();
+    // ── compute_slide_hashes ─────────────────────────────────────────────────
 
-//         for change in changes {
-//             println!("{:?}", change);
-//             println!("pure insertion: {:?}", change.is_pure_insertion());
-//             println!("pure removal: {:?}", change.is_pure_removal());
-//         }
+    #[test]
+    fn test_compute_slide_hashes_count_and_uniqueness() {
+        let hashes = compute_slide_hashes(two_slide_doc()).unwrap();
+        assert_eq!(hashes.data.len(), 2, "Should produce one hash per slide");
+        assert_ne!(
+            hashes.data[0], hashes.data[1],
+            "Different slides should have different hashes"
+        );
+    }
 
-//         // assert_eq!(changes.collect::<Vec<Hunk>>().len(), 1);
-//         // match &changes.next() {
-//         //     SlideChange::Added(index) => assert_eq!(*index, 2),
-//         //     _ => panic!("Expected Added change"),
-//         // }
-//     }
+    #[test]
+    fn test_compute_slide_hashes_stability() {
+        // Hashing the same document twice must yield identical vectors.
+        let h1 = compute_slide_hashes(two_slide_doc()).unwrap();
+        let h2 = compute_slide_hashes(two_slide_doc()).unwrap();
+        assert_eq!(h1, h2, "compute_slide_hashes must be deterministic");
+    }
 
-//     #[test]
-//     fn test_detect_slide_changes_removed() {
-//         let old_hashes = vec![1, 2, 3];
-//         let new_hashes = vec![1, 3];
+    // ── detect_slide_changes ─────────────────────────────────────────────────
 
-//         let changes = detect_slide_changes(&old_hashes, &new_hashes);
+    #[test]
+    fn test_detect_no_changes_when_identical() {
+        let old = VecSlideHashes::create_from(vec![11, 22, 33]);
+        let new = VecSlideHashes::create_from(vec![11, 22, 33]);
 
-//         assert_eq!(changes.len(), 1);
-//         match &changes[0] {
-//             SlideChange::Removed(index) => assert_eq!(*index, 1),
-//             _ => panic!("Expected Removed change"),
-//         }
-//     }
+        let diff = detect_slide_changes(&old, &new);
+        assert_eq!(
+            diff.hunks().count(),
+            0,
+            "Identical hash sequences should produce zero hunks"
+        );
+    }
 
-//     #[test]
-//     fn test_detect_slide_changes_complex() {
-//         let old_hashes = vec![1, 2, 3];
-//         let new_hashes = vec![2, 4, 3, 5];
+    #[test]
+    fn test_detect_slide_appended() {
+        // A new slide is appended at the end.
+        let old = VecSlideHashes::create_from(vec![11, 22]);
+        let new = VecSlideHashes::create_from(vec![11, 22, 33]);
 
-//         let changes = detect_slide_changes(&old_hashes, &new_hashes);
+        let diff = detect_slide_changes(&old, &new);
+        let hunks = hunk_ranges(&diff);
+        assert_eq!(hunks.len(), 1, "Should be exactly one hunk");
+        let (bs, be, as_, ae) = hunks[0];
+        assert_eq!(bs, be, "Pure insertion: before range should be empty");
+        assert_eq!(ae - as_, 1, "Exactly one slide inserted");
+    }
 
-//         // Debug: print what we actually get
-//         println!("Changes detected: {:?}", changes);
+    #[test]
+    fn test_detect_slide_prepended() {
+        // A new slide is inserted at the front.
+        let old = VecSlideHashes::create_from(vec![11, 22]);
+        let new = VecSlideHashes::create_from(vec![99, 11, 22]);
 
-//         // With our simple algorithm:
-//         // - slide 0 (hash 1) is removed
-//         // - slide 1 becomes slide 0 (hash 2) - same hash, but moved
-//         // - slide 2 (hash 3) stays slide 2 - same hash
-//         // - slide with hash 4 is added at position 1
-//         // - slide with hash 5 is added at position 3
+        let diff = detect_slide_changes(&old, &new);
+        let hunks = hunk_ranges(&diff);
+        assert_eq!(hunks.len(), 1);
+        let (bs, be, _as, ae) = hunks[0];
+        assert_eq!(bs, be, "Pure insertion: before range should be empty");
+        assert_eq!(ae - _as, 1);
+    }
 
-//         // Our current logic:
-//         // Common prefix: empty (since 1 != 2)
-//         // Common suffix: slide with hash 3 at end
-//         // So we get: removed slide 0, added slide 1, added slide 3
+    #[test]
+    fn test_detect_slide_removed_middle() {
+        // Slide at index 1 is removed.
+        let old = VecSlideHashes::create_from(vec![1, 2, 3]);
+        let new = VecSlideHashes::create_from(vec![1, 3]);
 
-//         assert_eq!(changes.len(), 3);
+        let diff = detect_slide_changes(&old, &new);
+        let hunks = hunk_ranges(&diff);
+        assert_eq!(hunks.len(), 1);
+        let (bs, be, as_, ae) = hunks[0];
+        assert_eq!(be - bs, 1, "Exactly one slide removed");
+        assert_eq!(as_, ae, "Pure removal: after range should be empty");
+    }
 
-//         // Check that slide 0 was removed
-//         assert!(changes
-//             .iter()
-//             .any(|c| matches!(c, SlideChange::Removed(idx) if *idx == 0)));
+    #[test]
+    fn test_detect_slide_replaced() {
+        // Middle slide swapped for a different one (hash changes).
+        let old = VecSlideHashes::create_from(vec![1, 2, 3]);
+        let new = VecSlideHashes::create_from(vec![1, 99, 3]);
 
-//         // Check that we have additions
-//         assert!(changes.iter().any(|c| matches!(c, SlideChange::Added(_))));
-//     }
+        let diff = detect_slide_changes(&old, &new);
+        // Should see a replacement of slide at index 1.
+        let total_before: u32 = diff.hunks().map(|h| h.before.len() as u32).sum();
+        let total_after: u32 = diff.hunks().map(|h| h.after.len() as u32).sum();
+        assert_eq!(total_before, 1, "One slide should be marked as removed");
+        assert_eq!(total_after, 1, "One slide should be marked as added");
+    }
 
-//     #[test]
-//     fn test_incremental_pipeline_end_to_end() {
-//         // Simulate complete incremental processing pipeline
-//         let old_content = r#"---
-// title: Slide 1
-// ---
-// Content 1
+    #[test]
+    fn test_detect_all_slides_replaced() {
+        let old = VecSlideHashes::create_from(vec![1, 2, 3]);
+        let new = VecSlideHashes::create_from(vec![4, 5, 6]);
 
-// ---
-// title: Slide 2
-// ---
-// Content 2"#;
+        let diff = detect_slide_changes(&old, &new);
+        let total_before: u32 = diff.hunks().map(|h| h.before.len() as u32).sum();
+        let total_after: u32 = diff.hunks().map(|h| h.after.len() as u32).sum();
+        assert_eq!(total_before, 3);
+        assert_eq!(total_after, 3);
+    }
 
-//         let new_content = r#"---
-// title: Slide 1
-// ---
-// Content 1
+    // ── create_slide_change_events ───────────────────────────────────────────
 
-// ---
-// title: Modified Slide 2
-// ---
-// Modified Content 2
+    #[test]
+    fn test_create_events_no_changes() {
+        let hashes = compute_slide_hashes(two_slide_doc()).unwrap();
+        let diff = detect_slide_changes(&hashes, &hashes);
+        let events = create_slide_change_events(&hashes, two_slide_doc(), diff, "").unwrap();
+        assert!(events.is_empty(), "No changes → no events");
+    }
 
-// ---
-// title: New Slide 3
-// ---
-// Content 3"#;
+    #[test]
+    fn test_create_events_slide_appended() {
+        let old_content = two_slide_doc();
+        let new_content = r#"---
+title: Slide 1
+---
+Content 1
 
-//         // 1. Compute old and new metadata
-//         let old_metadata = compute_slide_metadata(old_content).unwrap();
-//         let new_metadata = compute_slide_metadata(new_content).unwrap();
+---
+title: Slide 2
+---
+Content 2
 
-//         let old_hashes: Vec<u32> = old_metadata.iter().map(|m| m.hash).collect();
-//         let new_hashes: Vec<u32> = new_metadata.iter().map(|m| m.hash).collect();
+---
+title: Slide 3
+---
+Content 3"#;
 
-//         // 2. Detect changes
-//         let changes = detect_slide_changes(&old_hashes, &new_hashes);
+        let old_hashes = compute_slide_hashes(old_content).unwrap();
+        let new_hashes = compute_slide_hashes(new_content).unwrap();
+        let diff = detect_slide_changes(&old_hashes, &new_hashes);
+        let events = create_slide_change_events(&old_hashes, new_content, diff, "").unwrap();
 
-//         // Should detect modifications and additions
-//         assert!(!changes.is_empty());
+        assert_eq!(events.len(), 1);
+        assert!(
+            matches!(events[0], SlideChangeType::Added { index: 2, .. }),
+            "New slide should be Added at index 2"
+        );
+    }
 
-//         // 3. Create change events
-//         let change_events =
-//             create_slide_change_events(old_content, new_content, &changes, "/test/base").unwrap();
+    #[test]
+    fn test_create_events_slide_removed() {
+        let old_content = two_slide_doc();
+        let new_content = r#"---
+title: Slide 1
+---
+Content 1"#;
 
-//         // Should have change events
-//         assert!(!change_events.is_empty());
+        let old_hashes = compute_slide_hashes(old_content).unwrap();
+        let new_hashes = compute_slide_hashes(new_content).unwrap();
+        let diff = detect_slide_changes(&old_hashes, &new_hashes);
+        let events = create_slide_change_events(&old_hashes, new_content, diff, "").unwrap();
 
-//         // Verify events contain expected change types
-//         assert!(change_events
-//             .iter()
-//             .any(|e| matches!(e, SlideChangeType::Added { .. })
-//                 || matches!(e, SlideChangeType::Modified { .. })));
-//     }
+        assert_eq!(events.len(), 1);
+        assert!(
+            matches!(events[0], SlideChangeType::Removed { index: 1, .. }),
+            "Removed slide should be Removed at index 1"
+        );
+    }
 
-//     #[test]
-//     fn test_incremental_state_consistency() {
-//         // Test that applying changes produces same result as full reload
-//         let initial_content = r#"---
-// title: Slide 1
-// ---
-// Content 1"#;
+    #[test]
+    fn test_create_events_slide_modified() {
+        // Modifying a slide is represented as one Removed + one Added.
+        let old_content = two_slide_doc();
+        let new_content = r#"---
+title: Slide 1
+---
+Content 1
 
-//         let updated_content = r#"---
-// title: Slide 1
-// ---
-// Content 1
+---
+title: Slide 2 MODIFIED
+---
+Updated content"#;
 
-// ---
-// title: Slide 2
-// ---
-// Content 2"#;
+        let old_hashes = compute_slide_hashes(old_content).unwrap();
+        let new_hashes = compute_slide_hashes(new_content).unwrap();
+        let diff = detect_slide_changes(&old_hashes, &new_hashes);
+        let events = create_slide_change_events(&old_hashes, new_content, diff, "").unwrap();
 
-//         // 1. Get initial metadata
-//         let initial_metadata = compute_slide_metadata(initial_content).unwrap();
-//         let initial_hashes: Vec<u32> = initial_metadata.iter().map(|m| m.hash).collect();
+        let removed_count = events
+            .iter()
+            .filter(|e| matches!(e, SlideChangeType::Removed { .. }))
+            .count();
+        let added_count = events
+            .iter()
+            .filter(|e| matches!(e, SlideChangeType::Added { .. }))
+            .count();
 
-//         // 2. Get updated metadata
-//         let updated_metadata = compute_slide_metadata(updated_content).unwrap();
-//         let updated_hashes: Vec<u32> = updated_metadata.iter().map(|m| m.hash).collect();
+        assert_eq!(removed_count, 1, "Modified slide should emit one Removed");
+        assert_eq!(added_count, 1, "Modified slide should emit one Added");
+    }
 
-//         // 3. Detect changes
-//         let _changes = detect_slide_changes(&initial_hashes, &updated_hashes);
+    #[test]
+    fn test_create_events_removed_old_hash_preserved() {
+        // The Removed event must carry the correct old hash.
+        let old_hashes = compute_slide_hashes(two_slide_doc()).unwrap();
+        let expected_hash = old_hashes.data[1];
 
-//         // 4. Verify slide stability
-//         let min_len = initial_hashes.len().min(updated_hashes.len());
-//         let mut common_prefix_len = 0;
-//         for i in 0..min_len {
-//             if initial_hashes[i] == updated_hashes[i] {
-//                 common_prefix_len += 1;
-//             } else {
-//                 break;
-//             }
-//         }
+        let new_content = r#"---
+title: Slide 1
+---
+Content 1"#;
+        let new_hashes = compute_slide_hashes(new_content).unwrap();
+        let diff = detect_slide_changes(&old_hashes, &new_hashes);
+        let events = create_slide_change_events(&old_hashes, new_content, diff, "").unwrap();
 
-//         assert_eq!(common_prefix_len, 1, "First slide should be unchanged");
-//     }
-// }
+        if let SlideChangeType::Removed { old_hash, .. } = &events[0] {
+            assert_eq!(
+                *old_hash, expected_hash,
+                "Removed event must carry the old hash"
+            );
+        } else {
+            panic!("Expected a Removed event");
+        }
+    }
+
+    // ── multi-change sequence (simulates multiple consecutive file saves) ────
+
+    #[test]
+    fn test_incremental_pipeline_end_to_end() {
+        // v1 → v2: slide 2 is modified + slide 3 is added.
+        let v1 = two_slide_doc();
+        let v2 = r#"---
+title: Slide 1
+---
+Content 1
+
+---
+title: Modified Slide 2
+---
+Modified Content 2
+
+---
+title: New Slide 3
+---
+Content 3"#;
+
+        let h1 = compute_slide_hashes(v1).unwrap();
+        let h2 = compute_slide_hashes(v2).unwrap();
+        let diff = detect_slide_changes(&h1, &h2);
+        let events = create_slide_change_events(&h1, v2, diff, "").unwrap();
+
+        assert!(!events.is_empty());
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, SlideChangeType::Added { .. })));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, SlideChangeType::Removed { .. })));
+    }
+
+    #[test]
+    fn test_unchanged_slides_produce_no_events() {
+        // Slide 1 stays the same; only slide 2 changes.
+        let old_content = two_slide_doc();
+        let new_content = r#"---
+title: Slide 1
+---
+Content 1
+
+---
+title: Slide 2 changed
+---
+Different content"#;
+
+        let old_hashes = compute_slide_hashes(old_content).unwrap();
+        let new_hashes = compute_slide_hashes(new_content).unwrap();
+
+        // Slide 1 hash must be stable across versions.
+        assert_eq!(
+            old_hashes.data[0], new_hashes.data[0],
+            "Slide 1 hash should be identical because its content did not change"
+        );
+
+        let diff = detect_slide_changes(&old_hashes, &new_hashes);
+        let events = create_slide_change_events(&old_hashes, new_content, diff, "").unwrap();
+
+        // No event should reference slide index 0.
+        for event in &events {
+            match event {
+                SlideChangeType::Added { index, .. } => {
+                    assert_ne!(
+                        *index, 0,
+                        "Slide 0 was not changed; no Added event expected"
+                    )
+                }
+                SlideChangeType::Removed { index, .. } => {
+                    assert_ne!(
+                        *index, 0,
+                        "Slide 0 was not changed; no Removed event expected"
+                    )
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_multiple_sequential_changes() {
+        // Simulates three consecutive file-save cycles.
+        //
+        // save 1 → save 2: append slide 3
+        // save 2 → save 3: remove slide 2, modify slide 1
+        // After all three saves the test verifies each transition independently.
+
+        let save1 = r#"---
+title: Slide A
+---
+Alpha
+
+---
+title: Slide B
+---
+Beta"#;
+
+        let save2 = r#"---
+title: Slide A
+---
+Alpha
+
+---
+title: Slide B
+---
+Beta
+
+---
+title: Slide C
+---
+Gamma"#;
+
+        let save3 = r#"---
+title: Slide A UPDATED
+---
+Alpha updated
+
+---
+title: Slide C
+---
+Gamma"#;
+
+        // ── transition 1 ────────────────────────────────────────────────────
+        let h1 = compute_slide_hashes(save1).unwrap();
+        let h2 = compute_slide_hashes(save2).unwrap();
+        let diff12 = detect_slide_changes(&h1, &h2);
+        let events12 = create_slide_change_events(&h1, save2, diff12, "").unwrap();
+
+        assert_eq!(events12.len(), 1, "Only one slide added in transition 1");
+        assert!(matches!(
+            events12[0],
+            SlideChangeType::Added { index: 2, .. }
+        ));
+
+        // ── transition 2 ────────────────────────────────────────────────────
+        let h3 = compute_slide_hashes(save3).unwrap();
+        let diff23 = detect_slide_changes(&h2, &h3);
+        let events23 = create_slide_change_events(&h2, save3, diff23, "").unwrap();
+
+        // Slide A changed (remove old + add new) and Slide B was removed.
+        let removed: Vec<_> = events23
+            .iter()
+            .filter(|e| matches!(e, SlideChangeType::Removed { .. }))
+            .collect();
+        let added: Vec<_> = events23
+            .iter()
+            .filter(|e| matches!(e, SlideChangeType::Added { .. }))
+            .collect();
+
+        // Two slides removed (A and B), one slide added (updated A).
+        assert_eq!(
+            removed.len(),
+            2,
+            "Slide A (old) and Slide B should be removed"
+        );
+        assert_eq!(added.len(), 1, "Updated Slide A should be added");
+
+        // ── hash stability across save1 → save3 for unchanged slide C ───────
+        // Slide C appears at index 2 in save2 and index 1 in save3.
+        assert_eq!(
+            h2.data[2], h3.data[1],
+            "Slide C content unchanged: hash must be the same across transitions"
+        );
+    }
+
+    #[test]
+    fn test_idempotent_reprocessing() {
+        // Applying the same diff twice on unchanged content should produce
+        // zero events the second time.
+        let content = two_slide_doc();
+        let hashes = compute_slide_hashes(content).unwrap();
+
+        let diff = detect_slide_changes(&hashes, &hashes);
+        let events = create_slide_change_events(&hashes, content, diff, "").unwrap();
+
+        assert!(
+            events.is_empty(),
+            "Re-processing identical content must produce no events"
+        );
+    }
+}
