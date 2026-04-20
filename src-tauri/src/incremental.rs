@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use twox_hash::XxHash32;
 
-use super::parser::{parse_individual_slide, Slide};
+use super::parser::{parse_individual_slide, validate_slide_divider_syntax, ParseError, Slide};
 
 // /// Metadata for tracking slide changes
 // #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -61,9 +61,9 @@ pub fn compute_slide_hash(slide_content: &str) -> u32 {
 
 /// Split content into sections with indices
 /// Returns vector of (index, section_content) tuples
-pub fn split_into_sections_with_indices(content: &str) -> Vec<(usize, String)> {
-    let sections = super::parser::split_into_sections(content);
-    sections.into_iter().enumerate().collect()
+pub fn split_into_sections_with_indices(content: &str) -> Result<Vec<(usize, String)>, ParseError> {
+    let sections = super::parser::split_into_sections(content)?;
+    Ok(sections.into_iter().enumerate().collect())
 }
 
 // /// Compute metadata (hash + index) for all slides in content
@@ -81,7 +81,10 @@ pub fn split_into_sections_with_indices(content: &str) -> Vec<(usize, String)> {
 
 /// Compute hash for all slides in content
 pub fn compute_slide_hashes(content: &str) -> Result<VecSlideHashes, Box<dyn Error>> {
-    let sections = super::parser::split_into_sections(content);
+    super::parser::validate_slide_divider_syntax(content)
+        .map_err(|e| Box::new(e) as Box<dyn Error>)?;
+
+    let sections = super::parser::split_into_sections(content)?;
     let mut hashes = Vec::new();
 
     for section in sections {
@@ -104,9 +107,12 @@ pub fn create_slide_change_events(
     changes: Diff,
     base_dir: &str,
 ) -> Result<Vec<SlideChangeType>, Box<dyn Error>> {
+    super::parser::validate_slide_divider_syntax(new_content)
+        .map_err(|e| Box::new(e) as Box<dyn Error>)?;
+
     let mut change_events = Vec::new();
 
-    let new_sections = split_into_sections_with_indices(new_content);
+    let new_sections = split_into_sections_with_indices(new_content)?;
 
     let mut index_adjustment: i32 = 0;
     for change in changes.hunks() {
@@ -592,6 +598,27 @@ Gamma"#;
         assert!(
             events.is_empty(),
             "Re-processing identical content must produce no events"
+        );
+    }
+
+    #[test]
+    fn test_broken_then_fixed_produces_events() {
+        let v1 = two_slide_doc();
+        let broken = "No dividers here";
+        let v1_hashes = compute_slide_hashes(v1).unwrap();
+
+        let diff_broken = detect_slide_changes(&v1_hashes, &VecSlideHashes::new());
+        let changes = diff_broken.hunks().collect::<Vec<_>>();
+        assert!(!changes.is_empty(), "Broken content should produce changes");
+
+        let broken_hashes = compute_slide_hashes(broken).unwrap_err();
+        assert!(broken_hashes.to_string().contains("No slide dividers"));
+
+        let diff_fixed = detect_slide_changes(&VecSlideHashes::new(), &v1_hashes);
+        let changes_fixed = diff_fixed.hunks().collect::<Vec<_>>();
+        assert!(
+            !changes_fixed.is_empty(),
+            "Fixed content should produce changes"
         );
     }
 }

@@ -4,7 +4,26 @@ use pulldown_cmark::{CowStr, Event, Options, Parser as MarkdownParser};
 use pulldown_latex::{mathml::push_mathml, Parser as LatexParser, Storage};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::fmt;
 use std::fs;
+
+#[derive(Debug, Serialize, Clone)]
+pub struct ParseError {
+    pub message: String,
+    pub line: Option<usize>,
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(line) = self.line {
+            write!(f, "Line {}: {}", line, self.message)
+        } else {
+            write!(f, "{}", self.message)
+        }
+    }
+}
+
+impl Error for ParseError {}
 
 use base64::engine::general_purpose::STANDARD;
 
@@ -38,8 +57,10 @@ pub fn parse_markdown_with_frontmatter(
     content: &str,
     base_dir: &str,
 ) -> Result<Vec<Slide>, Box<dyn Error>> {
+    validate_slide_divider_syntax(content)?;
+
     let matter = Matter::<YAML>::new();
-    let sections = split_into_sections(content);
+    let sections = split_into_sections(content)?;
     let mut cards = Vec::new();
 
     for section in sections {
@@ -97,8 +118,79 @@ pub fn parse_individual_slide(section: &str, base_dir: &str) -> Result<Slide, Bo
     Ok(slide)
 }
 
+pub fn validate_slide_divider_syntax(content: &str) -> Result<(), ParseError> {
+    let normalized = content.replace("\r\n", "\n");
+    let lines: Vec<&str> = normalized.lines().collect();
+
+    let mut in_frontmatter = false;
+    let mut open_divider_line: Option<usize> = None;
+    let mut divider_count = 0;
+
+    for (i, line) in lines.iter().enumerate() {
+        let line_num = i + 1;
+        let trimmed = line.trim();
+
+        if trimmed == "---" {
+            divider_count += 1;
+
+            if let Some(last_line) = open_divider_line {
+                if i == last_line + 1 {
+                    return Err(ParseError {
+                        message: "Consecutive dividers '---' found. Each divider must separate frontmatter from content.".to_string(),
+                        line: Some(line_num),
+                    });
+                }
+            }
+
+            open_divider_line = Some(i);
+
+            if !in_frontmatter {
+                in_frontmatter = true;
+            } else {
+                in_frontmatter = false;
+            }
+        } else if in_frontmatter && !trimmed.is_empty() {
+            if trimmed.contains("---") {
+                return Err(ParseError {
+                    message: "Invalid divider '---' found within frontmatter. Dividers must be on their own line.".to_string(),
+                    line: Some(line_num),
+                });
+            }
+        }
+    }
+
+    if divider_count % 2 != 0 {
+        return Err(ParseError {
+            message: "Unmatched divider '---'. Each opening '---' must have a closing '---'."
+                .to_string(),
+            line: None,
+        });
+    }
+
+    if divider_count == 0 {
+        return Err(ParseError {
+            message: "No slide dividers '---' found. Slides must be separated with '---' dividers."
+                .to_string(),
+            line: None,
+        });
+    }
+
+    if content.trim().contains("---") {
+        let has_proper_format = divider_count >= 2;
+        if !has_proper_format {
+            return Err(ParseError {
+                message: "Invalid divider '---' found without proper frontmatter format."
+                    .to_string(),
+                line: None,
+            });
+        }
+    }
+
+    Ok(())
+}
+
 // Split content into multiple sections, each containing frontmatter and markdown content
-pub fn split_into_sections(content: &str) -> Vec<String> {
+pub fn split_into_sections(content: &str) -> Result<Vec<String>, ParseError> {
     // First, normalize line endings to ensure consistent processing
     let mut content = content.replace("\r\n", "\n");
 
@@ -139,7 +231,7 @@ pub fn split_into_sections(content: &str) -> Vec<String> {
         sections.push(content.to_string());
     }
 
-    sections
+    Ok(sections)
 }
 
 // Process markdown content and handle KaTeX expressions
@@ -405,5 +497,128 @@ title: Video Test
             video_regex.is_match(content),
             "Video tag is not properly formatted"
         );
+    }
+
+    #[test]
+    fn test_validate_valid_slides() {
+        let valid_slides = r#"---
+title: Slide 1
+---
+Content 1
+
+---
+title: Slide 2
+---
+Content 2"#;
+        assert!(validate_slide_divider_syntax(valid_slides).is_ok());
+    }
+
+    #[test]
+    fn test_validate_no_dividers() {
+        let no_dividers = r#"# My Slide
+
+Some content without any dividers."#;
+        let result = validate_slide_divider_syntax(no_dividers);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.message.contains("No slide dividers"));
+    }
+
+    #[test]
+    fn test_error_then_fix_recovery() {
+        let broken = "No dividers here";
+        let fixed = r#"---
+title: Fixed
+---
+Content"#;
+
+        let result_broken = validate_slide_divider_syntax(broken);
+        assert!(result_broken.is_err());
+
+        let result_fixed = validate_slide_divider_syntax(fixed);
+        assert!(result_fixed.is_ok());
+        let sections = split_into_sections(fixed).unwrap();
+        assert_eq!(sections.len(), 1);
+    }
+
+    #[test]
+    fn test_validate_single_slide() {
+        let single_slide = r#"---
+title: My Slide
+---
+Some content here."#;
+        assert!(validate_slide_divider_syntax(single_slide).is_ok());
+    }
+
+    #[test]
+    fn test_validate_consecutive_dividers() {
+        let consecutive = "---\ntitle: Slide 1\n---\n---\ntitle: Slide 2";
+        let result = validate_slide_divider_syntax(consecutive);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.message.contains("Consecutive dividers"));
+    }
+
+    #[test]
+    fn test_validate_unmatched_divider() {
+        let no_closing = r#"---
+title: Slide 1
+---
+Content
+---
+title: Slide 2"#;
+        let result = validate_slide_divider_syntax(no_closing);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.message.contains("Unmatched"));
+    }
+
+    #[test]
+    fn test_validate_trailing_divider() {
+        let trailing = r#"---
+title: Slide 1
+---
+Content 1
+
+---"#;
+        let result = validate_slide_divider_syntax(trailing);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.message.contains("Unmatched") || err.message.contains("Trailing"));
+    }
+
+    #[test]
+    fn test_validate_divider_in_content() {
+        let divider_in_content = r#"---
+title: Slide
+---
+Use --- to separate items"#;
+        let result = validate_slide_divider_syntax(divider_in_content);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_divider_in_frontmatter() {
+        let in_frontmatter = r#"---
+title: Slide ---
+key: value
+---
+Content"#;
+        let result = validate_slide_divider_syntax(in_frontmatter);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.message.contains("within frontmatter"));
+    }
+
+    #[test]
+    fn test_split_into_sections_returns_result() {
+        let content = r#"---
+title: Slide 1
+---
+Content 1"#;
+        let result = split_into_sections(content);
+        assert!(result.is_ok());
+        let sections = result.unwrap();
+        assert_eq!(sections.len(), 1);
     }
 }

@@ -1,8 +1,5 @@
 # TODO:
 
-- [ ] add an error screen for when the syntax is not correct
-  - [ ] make sure it displays the error when opening new slides
-  - [ ] make sure it displays an error pop up on the opened slide when editing
 - [ ] run tests on building release
 - [ ] add easy to use fonts support
 - [ ] add easy to use rtl support
@@ -16,9 +13,9 @@
   - [ ] get the pdf output of ther platforms and convert them to slideflare markdown using mistral OCR or other OCR tools that support images (mistral takes screenshots of the things that are not convertable to markdown)
 
 - [ ] make slideflare faster: \
-  either:
+      either:
   - [ ] make the slide parsing more efficient by parsing everything at once rather than per slide \
-  or:
+        or:
   - [ ] use tokio instead of std for asynchronous file reading
   - [ ] parallelize the image/video processing OR slides processing as a whole
 
@@ -36,6 +33,9 @@
 - [x] Performance Bug (watcher.rs:66 & 94): compute_slide_hashes() called twice, causing unnecessary double parsing
 - [x] fix jumping on the first slide after an edit
   - use the hash to know what the correct slide is
+- [x] add an error screen for when the syntax is not correct
+  - [x] make sure it displays the error when opening new slides
+  - [x] make sure it displays an error pop up on the opened slide when editing
 
 # Later
 

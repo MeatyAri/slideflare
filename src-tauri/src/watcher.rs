@@ -35,61 +35,100 @@ fn send_new_file(
     incremental_state: &Arc<Mutex<IncrementalState>>,
 ) -> Result<(), Box<dyn Error>> {
     if let Ok(content) = fs::read_to_string(file_path) {
-        // Check if the content has changed
         let file_hash = XxHash64::oneshot(42, content.as_bytes());
 
         let mut state_lock = incremental_state.lock().unwrap();
 
-        // If file hasn't changed, no action needed
         if state_lock.last_file_hash == file_hash {
             return Ok(());
         }
 
-        let new_slide_hashes = compute_slide_hashes(&content)?;
-
-        // Get the directory of the markdown file for relative path resolution
         let base_dir = PathBuf::from(file_path)
             .parent()
             .unwrap_or(&PathBuf::from("."))
             .to_string_lossy()
             .to_string();
 
-        // For first load, use legacy full processing
         if state_lock.last_slide_hashes.data.is_empty() {
-            let res = parse_markdown_with_frontmatter(&content, &base_dir)?;
-            let json_string = serde_json::to_string(&res)?;
+            match parse_markdown_with_frontmatter(&content, &base_dir) {
+                Ok(res) => {
+                    let json_string = serde_json::to_string(&res)?;
+                    window
+                        .emit("markdown-updated", json_string)
+                        .expect("Failed to emit event");
 
-            window
-                .emit("markdown-updated", json_string)
-                .expect("Failed to emit event");
-        } else {
-            // Use incremental processing
-            let slide_changes =
-                detect_slide_changes(&state_lock.last_slide_hashes, &new_slide_hashes);
-
-            if slide_changes.hunks().next().is_none() {
-                return Ok(());
+                    let new_slide_hashes = compute_slide_hashes(&content)?;
+                    state_lock.last_file_hash = file_hash;
+                    state_lock.last_slide_hashes = new_slide_hashes;
+                }
+                Err(e) => {
+                    let parse_error = crate::parser::ParseError {
+                        message: e.to_string(),
+                        line: None,
+                    };
+                    let json_string = serde_json::to_string(&parse_error)?;
+                    window
+                        .emit("parse-error", json_string)
+                        .expect("Failed to emit parse error event");
+                    state_lock.last_file_hash = file_hash;
+                    state_lock.last_slide_hashes = VecSlideHashes::new();
+                }
             }
-
-            let change_events = create_slide_change_events(
-                &state_lock.last_slide_hashes,
-                &content,
-                slide_changes,
-                &base_dir,
-            )?;
-
-            let slide_change_event = SlideChangeEvent {
-                changes: change_events,
-            };
-
-            let json_string = serde_json::to_string(&slide_change_event)?;
-
-            window
-                .emit("slide-changed", json_string)
-                .expect("Failed to emit slide change event");
+            return Ok(());
         }
 
-        // Update state
+        let new_slide_hashes = match compute_slide_hashes(&content) {
+            Ok(hashes) => hashes,
+            Err(e) => {
+                let parse_error = crate::parser::ParseError {
+                    message: e.to_string(),
+                    line: None,
+                };
+                let json_string = serde_json::to_string(&parse_error)?;
+                window
+                    .emit("parse-error", json_string)
+                    .expect("Failed to emit parse error event");
+                state_lock.last_file_hash = file_hash;
+                state_lock.last_slide_hashes = VecSlideHashes::new();
+                return Ok(());
+            }
+        };
+
+        let slide_changes = detect_slide_changes(&state_lock.last_slide_hashes, &new_slide_hashes);
+
+        if slide_changes.hunks().next().is_none() {
+            state_lock.last_file_hash = file_hash;
+            return Ok(());
+        }
+
+        match create_slide_change_events(
+            &state_lock.last_slide_hashes,
+            &content,
+            slide_changes,
+            &base_dir,
+        ) {
+            Ok(change_events) => {
+                let slide_change_event = SlideChangeEvent {
+                    changes: change_events,
+                };
+                let json_string = serde_json::to_string(&slide_change_event)?;
+                window
+                    .emit("slide-changed", json_string)
+                    .expect("Failed to emit slide change event");
+            }
+            Err(e) => {
+                let parse_error = crate::parser::ParseError {
+                    message: e.to_string(),
+                    line: None,
+                };
+                let json_string = serde_json::to_string(&parse_error)?;
+                window
+                    .emit("parse-error", json_string)
+                    .expect("Failed to emit parse error event");
+                state_lock.last_file_hash = file_hash;
+            }
+        }
+
         state_lock.last_file_hash = file_hash;
         state_lock.last_slide_hashes = new_slide_hashes;
 

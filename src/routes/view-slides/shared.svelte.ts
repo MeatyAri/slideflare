@@ -15,14 +15,23 @@ interface SlideChangeEvent {
   changes: SlideChangeType[];
 }
 
+interface ParseError {
+  message: string;
+  line: number | null;
+}
+
 interface SharedState {
   index: number;
   slides: Slide[];
+  error: ParseError | null;
 }
+
+export type { ParseError };
 
 export const shared: SharedState = $state({
   index: 0,
-  slides: JSON.parse(localStorage.getItem('slides') || '[]') as Slide[] // Load from localStorage
+  slides: JSON.parse(localStorage.getItem('slides') || '[]') as Slide[],
+  error: null
 });
 
 export function applySlideChange(event: SlideChangeEvent): void {
