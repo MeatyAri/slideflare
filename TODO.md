@@ -1,5 +1,6 @@
 # TODO:
 
+- [ ] add AI
 - [ ] run tests on building release
 - [ ] add easy to use fonts support
 - [ ] add easy to use rtl support
@@ -7,7 +8,6 @@
 - [ ] add mermaid diagrams
 - [ ] add shiki magic move
 - [ ] add themes, use JSON to create themes
-- [ ] add AI
 - [ ] add better styling
 - [ ] add easy way to convert slides from other platforms to slideflare:
   - [ ] get the pdf output of ther platforms and convert them to slideflare markdown using mistral OCR or other OCR tools that support images (mistral takes screenshots of the things that are not convertable to markdown)
@@ -36,6 +36,7 @@
 - [x] add an error screen for when the syntax is not correct
   - [x] make sure it displays the error when opening new slides
   - [x] make sure it displays an error pop up on the opened slide when editing
+  - [x] fix: the new slide validator is detecting an error for the perfectly fine example in the example.md
 
 # Later
 

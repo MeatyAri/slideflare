@@ -159,12 +159,16 @@ pub fn validate_slide_divider_syntax(content: &str) -> Result<(), ParseError> {
         }
     }
 
-    if divider_count % 2 != 0 {
-        return Err(ParseError {
-            message: "Unmatched divider '---'. Each opening '---' must have a closing '---'."
-                .to_string(),
-            line: None,
-        });
+    if divider_count >= 2 {
+        let last_divider_pos = normalized.rfind("---");
+        let after_last_divider = last_divider_pos.map(|pos| normalized[pos + 3..].trim()).unwrap_or("");
+        if divider_count % 2 != 0 && !after_last_divider.is_empty() {
+            return Err(ParseError {
+                message: "Unmatched divider '---'. Each opening '---' must have a closing '---'."
+                    .to_string(),
+                line: None,
+            });
+        }
     }
 
     if divider_count == 0 {
@@ -582,9 +586,22 @@ Content 1
 
 ---"#;
         let result = validate_slide_divider_syntax(trailing);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_trailing_divider_with_content() {
+        let trailing_with_content = r#"---
+title: Slide 1
+---
+Content 1
+
+---
+Extra content"#;
+        let result = validate_slide_divider_syntax(trailing_with_content);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(err.message.contains("Unmatched") || err.message.contains("Trailing"));
+        assert!(err.message.contains("Unmatched"));
     }
 
     #[test]
