@@ -1,6 +1,6 @@
-mod parser;
+pub mod incremental;
+pub mod parser;
 mod watcher;
-mod incremental;
 
 use crate::watcher::start_file_watcher;
 

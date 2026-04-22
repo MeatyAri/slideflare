@@ -144,24 +144,20 @@ pub fn validate_slide_divider_syntax(content: &str) -> Result<(), ParseError> {
 
             open_divider_line = Some(i);
 
-            if !in_frontmatter {
-                in_frontmatter = true;
-            } else {
-                in_frontmatter = false;
-            }
-        } else if in_frontmatter && !trimmed.is_empty() {
-            if trimmed.contains("---") {
-                return Err(ParseError {
+            in_frontmatter = !in_frontmatter;
+        } else if in_frontmatter && !trimmed.is_empty() && trimmed.contains("---") {
+            return Err(ParseError {
                     message: "Invalid divider '---' found within frontmatter. Dividers must be on their own line.".to_string(),
                     line: Some(line_num),
                 });
-            }
         }
     }
 
     if divider_count >= 2 {
         let last_divider_pos = normalized.rfind("---");
-        let after_last_divider = last_divider_pos.map(|pos| normalized[pos + 3..].trim()).unwrap_or("");
+        let after_last_divider = last_divider_pos
+            .map(|pos| normalized[pos + 3..].trim())
+            .unwrap_or("");
         if divider_count % 2 != 0 && !after_last_divider.is_empty() {
             return Err(ParseError {
                 message: "Unmatched divider '---'. Each opening '---' must have a closing '---'."
@@ -239,7 +235,7 @@ pub fn split_into_sections(content: &str) -> Result<Vec<String>, ParseError> {
 }
 
 // Process markdown content and handle KaTeX expressions
-fn process_markdown_with_latex(content: &str, base_dir: &str) -> String {
+pub fn process_markdown_with_latex(content: &str, base_dir: &str) -> String {
     // Enable all desired Markdown extensions
     let mut options = Options::empty();
     options.insert(Options::ENABLE_TABLES);
@@ -300,13 +296,13 @@ fn process_markdown_with_latex(content: &str, base_dir: &str) -> String {
 }
 
 // Convert a filesystem path to a data‑URL compatible path (used as a fallback)
-fn resolve_asset_path(path: String) -> String {
+pub fn resolve_asset_path(path: String) -> String {
     let normalized_path = path.replace('\\', "/");
     format!("asset://localhost/{}", normalized_path)
 }
 
 // Post‑process HTML to replace local image/video sources with Base64 data URLs
-fn post_process_asset_paths(html: &str, base_dir: &str) -> String {
+pub fn post_process_asset_paths(html: &str, base_dir: &str) -> String {
     use regex::Regex;
 
     let mut result = html.to_string();
@@ -363,7 +359,7 @@ fn post_process_asset_paths(html: &str, base_dir: &str) -> String {
 }
 
 // Read a file from the filesystem and convert it to a Base64 data URL
-fn read_file_as_base64(file_path: &str) -> Result<String, Box<dyn Error>> {
+pub fn read_file_as_base64(file_path: &str) -> Result<String, Box<dyn Error>> {
     let bytes = fs::read(file_path)?;
     let mime_type = mime_guess::from_path(file_path)
         .first_or_octet_stream()

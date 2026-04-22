@@ -81,8 +81,7 @@ pub fn split_into_sections_with_indices(content: &str) -> Result<Vec<(usize, Str
 
 /// Compute hash for all slides in content
 pub fn compute_slide_hashes(content: &str) -> Result<VecSlideHashes, Box<dyn Error>> {
-    super::parser::validate_slide_divider_syntax(content)
-        .map_err(|e| Box::new(e) as Box<dyn Error>)?;
+    validate_slide_divider_syntax(content).map_err(|e| Box::new(e) as Box<dyn Error>)?;
 
     let sections = super::parser::split_into_sections(content)?;
     let mut hashes = Vec::new();
@@ -107,8 +106,7 @@ pub fn create_slide_change_events(
     changes: Diff,
     base_dir: &str,
 ) -> Result<Vec<SlideChangeType>, Box<dyn Error>> {
-    super::parser::validate_slide_divider_syntax(new_content)
-        .map_err(|e| Box::new(e) as Box<dyn Error>)?;
+    validate_slide_divider_syntax(new_content).map_err(|e| Box::new(e) as Box<dyn Error>)?;
 
     let mut change_events = Vec::new();
 
