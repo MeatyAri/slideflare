@@ -25,7 +25,7 @@ bun run check:watch            # Type checking with watch mode
 - **Frontend**: SvelteKit 5 + TypeScript + Tailwind CSS 4
 - **Backend**: Rust with Tauri 2.0
 - **Styling**: Tailwind CSS with typography plugin
-- **Math**: KaTeX for LaTeX rendering
+- **Math**: MathML for LaTeX rendering
 
 ## Code Style Guidelines
 
