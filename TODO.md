@@ -1,6 +1,8 @@
 # TODO:
 
-- [ ] add AI
+- [ ] fix the `---` parsing problem
+- [ ] add the cool intro example (make it prettier)
+- [ ] publish the AI skill
 - [ ] run tests on building release
 - [ ] add easy to use fonts support
 - [ ] add easy to use rtl support
