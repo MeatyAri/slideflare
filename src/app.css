@@ -22,4 +22,12 @@
   video {
     @apply rounded-3xl;
   }
+
+  .prose pre {
+    @apply whitespace-pre-wrap break-words;
+  }
+
+  .prose code {
+    @apply whitespace-pre-wrap break-words;
+  }
 }
