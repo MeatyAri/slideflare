@@ -57,8 +57,6 @@ pub fn parse_markdown_with_frontmatter(
     content: &str,
     base_dir: &str,
 ) -> Result<Vec<Slide>, Box<dyn Error>> {
-    validate_slide_divider_syntax(content)?;
-
     let matter = Matter::<YAML>::new();
     let sections = split_into_sections(content)?;
     let mut cards = Vec::new();
@@ -118,120 +116,71 @@ pub fn parse_individual_slide(section: &str, base_dir: &str) -> Result<Slide, Bo
     Ok(slide)
 }
 
-pub fn validate_slide_divider_syntax(content: &str) -> Result<(), ParseError> {
-    let normalized = content.replace("\r\n", "\n");
-    let lines: Vec<&str> = normalized.lines().collect();
+/// Split markdown into slides using pulldown-cmark's native YAML metadata block detection.
+/// Returns a vector of raw slide strings, each in the format:
+/// ---
+/// yaml_frontmatter
+/// ---
+/// markdown_content
+pub fn split_into_sections(content: &str) -> Result<Vec<String>, ParseError> {
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_TABLES);
+    options.insert(Options::ENABLE_FOOTNOTES);
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    options.insert(Options::ENABLE_TASKLISTS);
+    options.insert(Options::ENABLE_SMART_PUNCTUATION);
+    options.insert(Options::ENABLE_GFM);
+    options.insert(Options::ENABLE_MATH);
+    options.insert(Options::ENABLE_YAML_STYLE_METADATA_BLOCKS);
 
-    let mut in_frontmatter = false;
-    let mut open_divider_line: Option<usize> = None;
-    let mut divider_count = 0;
-
-    for (i, line) in lines.iter().enumerate() {
-        let line_num = i + 1;
-        let trimmed = line.trim();
-
-        if trimmed == "---" {
-            divider_count += 1;
-
-            if let Some(last_line) = open_divider_line {
-                if i == last_line + 1 {
-                    return Err(ParseError {
-                        message: "Consecutive dividers '---' found. Each divider must separate frontmatter from content.".to_string(),
-                        line: Some(line_num),
-                    });
+    // Collect all metadata block start positions with their spans
+    let metadata_blocks: Vec<(usize, usize)> =
+        pulldown_cmark::Parser::new_ext(content, options)
+            .into_offset_iter()
+            .filter_map(|(event, span)| {
+                if matches!(
+                    event,
+                    pulldown_cmark::Event::Start(pulldown_cmark::Tag::MetadataBlock(_))
+                ) {
+                    Some((span.start, span.end))
+                } else {
+                    None
                 }
-            }
+            })
+            .collect();
 
-            open_divider_line = Some(i);
-
-            in_frontmatter = !in_frontmatter;
-        } else if in_frontmatter && !trimmed.is_empty() && trimmed.contains("---") {
-            return Err(ParseError {
-                    message: "Invalid divider '---' found within frontmatter. Dividers must be on their own line.".to_string(),
-                    line: Some(line_num),
-                });
-        }
-    }
-
-    if divider_count >= 2 {
-        let last_divider_pos = normalized.rfind("---");
-        let after_last_divider = last_divider_pos
-            .map(|pos| normalized[pos + 3..].trim())
-            .unwrap_or("");
-        if divider_count % 2 != 0 && !after_last_divider.is_empty() {
-            return Err(ParseError {
-                message: "Unmatched divider '---'. Each opening '---' must have a closing '---'."
-                    .to_string(),
-                line: None,
-            });
-        }
-    }
-
-    if divider_count == 0 {
+    if metadata_blocks.is_empty() {
         return Err(ParseError {
-            message: "No slide dividers '---' found. Slides must be separated with '---' dividers."
+            message: "No slide dividers '---' found. Slides must be separated with --- dividers."
                 .to_string(),
             line: None,
         });
     }
 
-    if content.trim().contains("---") {
-        let has_proper_format = divider_count >= 2;
-        if !has_proper_format {
-            return Err(ParseError {
-                message: "Invalid divider '---' found without proper frontmatter format."
-                    .to_string(),
-                line: None,
-            });
+    // Extract raw markdown for each slide using source spans
+    let mut slides = Vec::new();
+    for (i, &(meta_start, _meta_end)) in metadata_blocks.iter().enumerate() {
+        // Content ends at the next metadata block (or end of file)
+        let content_end = metadata_blocks
+            .get(i + 1)
+            .map(|&(next_meta_start, _)| next_meta_start)
+            .unwrap_or(content.len());
+
+        // Trim to match the old implementation's behavior
+        let raw_slide = content[meta_start..content_end].trim();
+        slides.push(raw_slide.to_string());
+    }
+
+    // Handle any content before the first metadata block (slide with no frontmatter)
+    if metadata_blocks[0].0 > 0 {
+        let first_meta_start = metadata_blocks[0].0;
+        let pre_content = content[..first_meta_start].trim();
+        if !pre_content.is_empty() {
+            slides.insert(0, pre_content.to_string());
         }
     }
 
-    Ok(())
-}
-
-// Split content into multiple sections, each containing frontmatter and markdown content
-pub fn split_into_sections(content: &str) -> Result<Vec<String>, ParseError> {
-    // First, normalize line endings to ensure consistent processing
-    let mut content = content.replace("\r\n", "\n");
-
-    // Add newlines at the beginning and end to ensure proper splitting
-    content.insert(0, '\n');
-    content.push('\n');
-
-    // Split the content by "---" lines
-    let parts: Vec<&str> = content.split("\n---\n").collect();
-    let mut sections = Vec::new();
-    let mut i = 0;
-
-    while i < parts.len() {
-        let yaml = parts[i].trim();
-
-        // Skip non‑YAML leading part
-        if i == 0 && (!yaml.is_empty() && !yaml.contains(':') || yaml.is_empty()) {
-            i += 1;
-            continue;
-        }
-
-        if i + 1 < parts.len() {
-            let markdown = parts[i + 1].trim();
-            let section = format!("---\n{}\n---\n{}", yaml, markdown);
-            sections.push(section);
-            i += 2;
-        } else {
-            break;
-        }
-    }
-
-    // Fallback: whole file as a single section if none were extracted
-    if sections.is_empty()
-        && !content.trim().is_empty()
-        && content.starts_with("---")
-        && content.matches("---").count() >= 2
-    {
-        sections.push(content.to_string());
-    }
-
-    Ok(sections)
+    Ok(slides)
 }
 
 // Process markdown content and handle KaTeX expressions
@@ -245,6 +194,7 @@ pub fn process_markdown_with_latex(content: &str, base_dir: &str) -> String {
     options.insert(Options::ENABLE_SMART_PUNCTUATION);
     options.insert(Options::ENABLE_GFM);
     options.insert(Options::ENABLE_MATH);
+    options.insert(Options::ENABLE_YAML_STYLE_METADATA_BLOCKS);
 
     // LaTeX processing setup
     let storage = Storage::new();
@@ -500,138 +450,91 @@ title: Video Test
     }
 
     #[test]
-    fn test_validate_valid_slides() {
-        let valid_slides = r#"---
+    fn test_split_no_dividers_returns_error() {
+        let content = "Just some content without dividers";
+        let result = split_into_sections(content);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().message.contains("No slide dividers"));
+    }
+
+    #[test]
+    fn test_split_three_slides() {
+        let content = r#"---
+title: A
+---
+Content A
+
+---
+title: B
+---
+Content B
+
+---
+title: C
+---
+Content C"#;
+        let sections = split_into_sections(content).unwrap();
+        assert_eq!(sections.len(), 3);
+    }
+
+    #[test]
+    fn test_split_with_code_block_containing_dashes() {
+        let content = r#"---
 title: Slide 1
 ---
-Content 1
+# Slide 1
+
+```
+---
+```
 
 ---
 title: Slide 2
 ---
 Content 2"#;
-        assert!(validate_slide_divider_syntax(valid_slides).is_ok());
+        let sections = split_into_sections(content).unwrap();
+        assert_eq!(sections.len(), 2);
     }
 
     #[test]
-    fn test_validate_no_dividers() {
-        let no_dividers = r#"# My Slide
-
-Some content without any dividers."#;
-        let result = validate_slide_divider_syntax(no_dividers);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.message.contains("No slide dividers"));
-    }
-
-    #[test]
-    fn test_error_then_fix_recovery() {
-        let broken = "No dividers here";
-        let fixed = r#"---
-title: Fixed
----
-Content"#;
-
-        let result_broken = validate_slide_divider_syntax(broken);
-        assert!(result_broken.is_err());
-
-        let result_fixed = validate_slide_divider_syntax(fixed);
-        assert!(result_fixed.is_ok());
-        let sections = split_into_sections(fixed).unwrap();
-        assert_eq!(sections.len(), 1);
-    }
-
-    #[test]
-    fn test_validate_single_slide() {
-        let single_slide = r#"---
-title: My Slide
----
-Some content here."#;
-        assert!(validate_slide_divider_syntax(single_slide).is_ok());
-    }
-
-    #[test]
-    fn test_validate_consecutive_dividers() {
-        let consecutive = "---\ntitle: Slide 1\n---\n---\ntitle: Slide 2";
-        let result = validate_slide_divider_syntax(consecutive);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.message.contains("Consecutive dividers"));
-    }
-
-    #[test]
-    fn test_validate_unmatched_divider() {
-        let no_closing = r#"---
+    fn test_split_with_table_containing_dashes() {
+        let content = r#"---
 title: Slide 1
 ---
-Content
+| A | B |
+|---|---|
+| 1 | 2 |
+
 ---
-title: Slide 2"#;
-        let result = validate_slide_divider_syntax(no_closing);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.message.contains("Unmatched"));
+title: Slide 2
+---
+Content 2"#;
+        let sections = split_into_sections(content).unwrap();
+        assert_eq!(sections.len(), 2);
     }
 
     #[test]
-    fn test_validate_trailing_divider() {
-        let trailing = r#"---
+    fn test_split_with_inline_code_dashes() {
+        let content = r#"---
 title: Slide 1
 ---
-Content 1
+Use `---` to separate.
 
----"#;
-        let result = validate_slide_divider_syntax(trailing);
-        assert!(result.is_ok());
+---
+title: Slide 2
+---
+Content 2"#;
+        let sections = split_into_sections(content).unwrap();
+        assert_eq!(sections.len(), 2);
     }
 
     #[test]
-    fn test_validate_trailing_divider_with_content() {
-        let trailing_with_content = r#"---
-title: Slide 1
----
-Content 1
-
----
-Extra content"#;
-        let result = validate_slide_divider_syntax(trailing_with_content);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.message.contains("Unmatched"));
-    }
-
-    #[test]
-    fn test_validate_divider_in_content() {
-        let divider_in_content = r#"---
-title: Slide
----
-Use --- to separate items"#;
-        let result = validate_slide_divider_syntax(divider_in_content);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_validate_divider_in_frontmatter() {
-        let in_frontmatter = r#"---
-title: Slide ---
-key: value
----
-Content"#;
-        let result = validate_slide_divider_syntax(in_frontmatter);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.message.contains("within frontmatter"));
-    }
-
-    #[test]
-    fn test_split_into_sections_returns_result() {
+    fn test_split_single_slide() {
         let content = r#"---
 title: Slide 1
 ---
 Content 1"#;
-        let result = split_into_sections(content);
-        assert!(result.is_ok());
-        let sections = result.unwrap();
+        let sections = split_into_sections(content).unwrap();
         assert_eq!(sections.len(), 1);
     }
 }

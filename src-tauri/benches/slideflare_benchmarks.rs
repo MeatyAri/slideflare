@@ -4,7 +4,7 @@ use slideflare_lib::incremental::{
 };
 use slideflare_lib::parser::{
     parse_individual_slide, parse_markdown_with_frontmatter, post_process_asset_paths,
-    read_file_as_base64, split_into_sections, validate_slide_divider_syntax,
+    read_file_as_base64, split_into_sections,
 };
 
 const SLIDES_10: &str = r#"---
@@ -1442,20 +1442,6 @@ title: Slide 20
 $$\text{Thanks for watching!}$$
 "#;
 
-fn bench_validate(c: &mut Criterion) {
-    let mut group = c.benchmark_group("validate");
-
-    group.bench_function("10_slides", |b| {
-        b.iter(|| validate_slide_divider_syntax(SLIDES_10));
-    });
-
-    group.bench_function("50_slides", |b| {
-        b.iter(|| validate_slide_divider_syntax(SLIDES_50));
-    });
-
-    group.finish();
-}
-
 fn bench_split(c: &mut Criterion) {
     let mut group = c.benchmark_group("split");
 
@@ -1654,7 +1640,6 @@ fn bench_diff(c: &mut Criterion) {
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
-    bench_validate(c);
     bench_split(c);
     bench_parse_individual(c);
     bench_parse_full(c);

@@ -1,6 +1,5 @@
 # TODO:
 
-- [ ] fix the `---` parsing problem
 - [ ] add the cool intro example (make it prettier)
 - [ ] publish the AI skill
 - [ ] run tests on building release
@@ -31,14 +30,7 @@
 # Testing:
 
 - [ ] test the examples provided in the readme
-- [x] replace temp incremental.rs implementations with imara-diff
-- [x] Performance Bug (watcher.rs:66 & 94): compute_slide_hashes() called twice, causing unnecessary double parsing
-- [x] fix jumping on the first slide after an edit
-  - use the hash to know what the correct slide is
-- [x] add an error screen for when the syntax is not correct
-  - [x] make sure it displays the error when opening new slides
-  - [x] make sure it displays an error pop up on the opened slide when editing
-  - [x] fix: the new slide validator is detecting an error for the perfectly fine example in the example.md
+- [x] fix the `---` parsing problem
 
 # Later
 
@@ -68,3 +60,11 @@
   - [x] fix handling of absolute paths
   - [x] add proper styling to images/videos
 - [x] Update the incremental.rs tests
+- [x] replace temp incremental.rs implementations with imara-diff
+- [x] Performance Bug (watcher.rs:66 & 94): compute_slide_hashes() called twice, causing unnecessary double parsing
+- [x] fix jumping on the first slide after an edit
+  - use the hash to know what the correct slide is
+- [x] add an error screen for when the syntax is not correct
+  - [x] make sure it displays the error when opening new slides
+  - [x] make sure it displays an error pop up on the opened slide when editing
+  - [x] fix: the new slide validator is detecting an error for the perfectly fine example in the example.md
