@@ -30,4 +30,13 @@
   .prose code {
     @apply whitespace-pre-wrap break-words;
   }
+
+  .prose h1,
+  .prose h2,
+  .prose h3,
+  .prose h4,
+  .prose h5,
+  .prose h6 {
+    color: inherit;
+  }
 }

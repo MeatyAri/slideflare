@@ -1,5 +1,6 @@
 # TODO:
 
+- [ ] markdown next to a html line won't get detected (check if there's a possible fix)
 - [ ] add the cool intro example (make it prettier)
 - [ ] publish the AI skill
 - [ ] run tests on building release
@@ -31,6 +32,8 @@
 
 - [ ] test the examples provided in the readme
 - [x] fix the `---` parsing problem
+- [x] find a solution for white or close to white backgrounds that make the text inisible
+  - [x] the text color property is not getting applied to the heading tags
 
 # Later
 
