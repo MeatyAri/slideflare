@@ -17,13 +17,23 @@ bun run format                 # Format code with Prettier
 bun run check                  # TypeScript type checking
 bun run check:watch            # Type checking with watch mode
 
-# No test framework configured yet (see TODO.md)
+# Testing
+bun run test                   # Run Rust unit tests (cargo test)
+bun run test:watch             # Run tests with watch mode
+
+# Benchmarks — cd into `src-tauri/` first, then run `cargo bench <filter>`
+cargo bench                  # Run all benchmarks
+cargo bench split            # Benchmark slide splitting only
+cargo bench hash             # Benchmark slide hashing only
+cargo bench diff             # Benchmark diff computation only
+cargo bench parse            # Benchmark full parsing only
 ```
 
 ## Tech Stack
 
 - **Frontend**: SvelteKit 5 + TypeScript + Tailwind CSS 4
-- **Backend**: Rust with Tauri 2.0
+- **Backend**: Rust with Tauri 2.0 — `src-tauri/` (parser, incremental diff, file watcher)
+- **Benchmarking**: Criterion framework in `src-tauri/benches/slideflare_benchmarks.rs`
 - **Styling**: Tailwind CSS with typography plugin
 - **Math**: MathML for LaTeX rendering
 
