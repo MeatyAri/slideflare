@@ -1,26 +1,26 @@
 # TODO:
 
-- [ ] markdown next to a html line won't get detected (check if there's a possible fix)
+- [ ] add better default styling
+  - [ ] to heading tags
 - [ ] add the cool intro example (make it prettier)
 - [ ] publish the AI skill
+  - [ ] mention it in the readme
+- [ ] add security implications to prevent a melicious slide deck from doing XSS and other types of attacks
+  - [ ] use ammonia
 - [ ] run tests on building release
 - [ ] add easy to use fonts support
 - [ ] add easy to use rtl support
-- [ ] add multipart slides
-- [ ] add mermaid diagrams
 - [ ] add shiki magic move
+- [ ] add code syntax highlighting
+- [ ] add mermaid diagrams
+- [ ] add multipart slides
 - [ ] add themes, use JSON to create themes
-- [ ] add better styling
 - [ ] add easy way to convert slides from other platforms to slideflare:
   - [ ] get the pdf output of ther platforms and convert them to slideflare markdown using mistral OCR or other OCR tools that support images (mistral takes screenshots of the things that are not convertable to markdown)
 
 - [ ] make slideflare faster: \
-      either:
-  - [ ] make the slide parsing more efficient by parsing everything at once rather than per slide \
-        or:
-  - [ ] use tokio instead of std for asynchronous file reading
-  - [ ] parallelize the image/video processing OR slides processing as a whole
-
+  - [ ] pase everything at once rather when rendering whole file and parse per slide when doing incremental updates \
+  - [ ] use tokio instead for asynchronous media processing
   - [ ] only process images/videos of the current slide or current + next slide (maybe remove previously loaded content after moving to the next slide)
 
 - [ ] complete the documentation
@@ -38,8 +38,8 @@
 # Later
 
 - [ ] add a help menu
-- add convert to pdf
-- add custom code component
+- [ ] add convert to pdf
+- [ ] add custom code component
 
 # Done
 
@@ -71,3 +71,5 @@
   - [x] make sure it displays the error when opening new slides
   - [x] make sure it displays an error pop up on the opened slide when editing
   - [x] fix: the new slide validator is detecting an error for the perfectly fine example in the example.md
+- [x] markdown next to a html line won't get detected (check if there's a possible fix)
+  - not possible, it's a CommonMark spec
