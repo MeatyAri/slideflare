@@ -26,7 +26,6 @@
 - [ ] complete the documentation
 - [ ] write more tests and move them into a separate folder
 - [ ] Do not open links inside the app, open them in the browser, (ask for confirmation before opening the link)
-- [ ] add to AUR
 
 # Testing:
 
@@ -34,6 +33,7 @@
 - [x] fix the `---` parsing problem
 - [x] find a solution for white or close to white backgrounds that make the text inisible
   - [x] the text color property is not getting applied to the heading tags
+- [x] add to AUR
 
 # Later
 
@@ -73,3 +73,6 @@
   - [x] fix: the new slide validator is detecting an error for the perfectly fine example in the example.md
 - [x] markdown next to a html line won't get detected (check if there's a possible fix)
   - not possible, it's a CommonMark spec
+- [x] update the readme, verify links work and remove katex from acknowledgments
+  - [x] mention the AUR installation
+
