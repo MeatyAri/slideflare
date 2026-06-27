@@ -30,10 +30,8 @@
 # Testing:
 
 - [ ] test the examples provided in the readme
-- [x] fix the `---` parsing problem
-- [x] find a solution for white or close to white backgrounds that make the text inisible
-  - [x] the text color property is not getting applied to the heading tags
 - [x] add to AUR
+- [x] the reload button should reread the file and do the whole parsing pipeline assuming that something went wrong
 
 # Later
 
@@ -75,4 +73,6 @@
   - not possible, it's a CommonMark spec
 - [x] update the readme, verify links work and remove katex from acknowledgments
   - [x] mention the AUR installation
-
+- [x] fix the `---` parsing problem
+- [x] find a solution for white or close to white backgrounds that make the text inisible
+  - [x] the text color property is not getting applied to the heading tags

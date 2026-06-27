@@ -13,6 +13,23 @@ use crate::incremental::{
 };
 use crate::parser::parse_markdown_with_frontmatter;
 
+/// State shared between the file watcher and the reparse command.
+/// Allows `reparse_document` to access the watcher's incremental state
+/// and file path so it can trigger a full reparse.
+pub struct AppState {
+    file_path: Mutex<Option<String>>,
+    incremental_state: Mutex<Option<Arc<Mutex<IncrementalState>>>>,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            file_path: Mutex::new(None),
+            incremental_state: Mutex::new(None),
+        }
+    }
+}
+
 /// State for incremental slide processing
 #[derive(Debug)]
 struct IncrementalState {
@@ -26,6 +43,13 @@ impl IncrementalState {
             last_file_hash: 0,
             last_slide_hashes: VecSlideHashes::new(),
         }
+    }
+
+    /// Reset to initial state so the next `send_new_file` call takes the
+    /// full-reparse path instead of the incremental diffing path.
+    fn reset(&mut self) {
+        self.last_file_hash = 0;
+        self.last_slide_hashes = VecSlideHashes::new();
     }
 }
 
@@ -139,14 +163,18 @@ fn send_new_file(
 }
 
 #[tauri::command]
-pub async fn start_file_watcher(window: tauri::Window, file_path: String) {
+pub async fn start_file_watcher(
+    window: tauri::Window,
+    app_state: tauri::State<'_, AppState>,
+    file_path: String,
+) -> Result<(), String> {
     //check if the file exists
     let file_path_buf = PathBuf::from(&file_path);
     if !file_path_buf.exists() {
         window
             .emit("file-not-found", "File not found")
             .expect("Failed to emit event");
-        return;
+        return Ok(());
     }
 
     // set the window title
@@ -161,6 +189,15 @@ pub async fn start_file_watcher(window: tauri::Window, file_path: String) {
 
     // create a shared state for incremental processing
     let incremental_state = Arc::new(Mutex::new(IncrementalState::new()));
+
+    // Store the file path and incremental state in app state so that the
+    // `reparse_document` command can trigger a full reparse later.
+    {
+        let mut path_lock = app_state.file_path.lock().unwrap();
+        *path_lock = Some(file_path.clone());
+        let mut state_lock = app_state.incremental_state.lock().unwrap();
+        *state_lock = Some(Arc::clone(&incremental_state));
+    }
 
     // Send the initial content of the file
     let _ = send_new_file(&window, &file_path, &incremental_state);
@@ -193,4 +230,48 @@ pub async fn start_file_watcher(window: tauri::Window, file_path: String) {
         ..Negahban::default() // sets rest of them to default
     }
     .watch();
+
+    Ok(())
+}
+
+/// Trigger a full reparse of the document, bypassing the incremental diffing
+/// mechanism. This resets the incremental state so that `send_new_file` takes
+/// the full-parse path (emitting `markdown-updated` with all slides) instead of
+/// computing and emitting incremental `slide-changed` events.
+///
+/// This is useful when the diffing mechanism produces a corrupted document and
+/// the user wants to force a clean reparse — equivalent to closing and reopening
+/// the app.
+#[tauri::command]
+pub async fn reparse_document(
+    window: tauri::Window,
+    app_state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let file_path = {
+        let path_lock = app_state.file_path.lock().unwrap();
+        match path_lock.clone() {
+            Some(path) => path,
+            None => return Ok(()),
+        }
+    };
+
+    let incremental_state = {
+        let state_lock = app_state.incremental_state.lock().unwrap();
+        match state_lock.clone() {
+            Some(state) => state,
+            None => return Ok(()),
+        }
+    };
+
+    // Reset the incremental state so the next call takes the full-reparse path
+    {
+        let mut state_lock = incremental_state.lock().unwrap();
+        state_lock.reset();
+    }
+
+    // Re-send the file — with cleared state this emits `markdown-updated`
+    // with the full slide list, exactly like the initial load.
+    let _ = send_new_file(&window, &file_path, &incremental_state);
+
+    Ok(())
 }

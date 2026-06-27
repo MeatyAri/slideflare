@@ -28,6 +28,29 @@ interface SharedState {
 
 export type { ParseError };
 
+export type NotificationColor = 'blue' | 'red' | 'yellow';
+
+interface Notification {
+  id: number;
+  message: string;
+  color: NotificationColor;
+}
+
+export const notifications: Notification[] = $state([]);
+
+let nextId = 0;
+
+export function notify(message: string, color: NotificationColor = 'blue'): void {
+  notifications.push({ id: nextId++, message, color });
+}
+
+export function dismissNotification(id: number): void {
+  const index = notifications.findIndex((n) => n.id === id);
+  if (index !== -1) {
+    notifications.splice(index, 1);
+  }
+}
+
 export const shared: SharedState = $state({
   index: 0,
   slides: JSON.parse(localStorage.getItem('slides') || '[]') as Slide[],

@@ -49,7 +49,7 @@ Describe your deck → slideflare-slides generates the Markdown → open in Slid
 
 Write your slides in Markdown, separate with `---`:
 
-````markdown
+```markdown
 ---
 bg_color: bg-gradient-to-br from-blue-600 to-purple-700
 text_color: text-white
@@ -67,7 +67,7 @@ Built with **Markdown**, styled with Tailwind, equations rendered as MathML.
 $$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$$
 
 That's it.
-````
+```
 
 Open SlideFlare and **drag and drop** your `.md` file — or double-click a slide file to launch it directly.
 
@@ -79,11 +79,11 @@ A full 15-slide walkthrough covering every feature: [intro-to-slideflare.md](exa
 
 Download from [GitHub Releases](https://github.com/MeatyAri/slideflare/releases):
 
-| Platform | File |
-|----------|------|
-| Linux | `slideflare-linux-x64` |
-| macOS | `slideflare-macos-universal.dmg` |
-| Windows | `slideflare-windows-x64.exe` |
+| Platform | File                             |
+| -------- | -------------------------------- |
+| Linux    | `slideflare-linux-x64`           |
+| macOS    | `slideflare-macos-universal.dmg` |
+| Windows  | `slideflare-windows-x64.exe`     |
 
 ### Arch Linux (AUR)
 
@@ -97,6 +97,7 @@ paru -S slideflare-git    # Latest git HEAD
 ### Linux & macOS
 
 **Linux & macOS (binary):**
+
 ```bash
 chmod +x slideflare && ./slideflare
 ```
@@ -115,12 +116,12 @@ bun run tauri build
 
 ## 🛠️ Development
 
-| Command | Description |
-|---------|-------------|
-| `bun run tauri dev` | Start dev server with hot reload |
-| `bun run check` | TypeScript type checking |
-| `bun run lint` | ESLint + Prettier |
-| `bun run tauri build` | Production binary |
+| Command               | Description                      |
+| --------------------- | -------------------------------- |
+| `bun run tauri dev`   | Start dev server with hot reload |
+| `bun run check`       | TypeScript type checking         |
+| `bun run lint`        | ESLint + Prettier                |
+| `bun run tauri build` | Production binary                |
 
 ## 📝 Contributing
 
@@ -136,18 +137,21 @@ Please review our contributing guidelines and code of conduct before contributin
 ## 🔮 Roadmap
 
 ### 0.2.0
+
 - [ ] AI-powered slide conversion (PowerPoint / PDF)
 - [ ] Mermaid diagram support
 - [ ] Shiki Magic Move for animated code transitions
 - [ ] Custom themes via JSON config
 
 ### 0.3.0
+
 - [ ] Multipart slides for complex layouts
 - [ ] Parallel processing optimizations
 - [ ] PDF export
 - [ ] Online sharing with generated links
 
 ### Future
+
 - [ ] Real-time collaborative editing
 - [ ] Plugin system
 - [ ] Mobile presentation controller

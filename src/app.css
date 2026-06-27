@@ -24,11 +24,11 @@
   }
 
   .prose pre {
-    @apply whitespace-pre-wrap break-words;
+    @apply break-words whitespace-pre-wrap;
   }
 
   .prose code {
-    @apply whitespace-pre-wrap break-words;
+    @apply break-words whitespace-pre-wrap;
   }
 
   .prose h1,
