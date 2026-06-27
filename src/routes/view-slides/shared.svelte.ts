@@ -1,3 +1,14 @@
+/**
+ * Fixed virtual design resolution. Every slide is laid out at exactly these
+ * dimensions and then uniformly scaled to fit the real window, so the layout is
+ * pixel-identical at any screen resolution or window size (16:9).
+ */
+export const DESIGN_W = 1280;
+export const DESIGN_H = 720;
+
+/** Tiny padding (px) left around the scaled slide canvas. */
+export const VIEWPORT_PADDING = 24;
+
 interface Slide {
   title: string;
   content: string;

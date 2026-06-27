@@ -1,6 +1,5 @@
 # TODO:
 
-- [ ] fix screen resizing issue
 - [ ] add a back button in UI + esc as shorcut
 - [ ] add a tutorial that pops op on the first use and on every update when new features are added
 - [ ] add better default styling
@@ -35,6 +34,7 @@
 - [ ] test the examples provided in the readme
 - [x] add to AUR
 - [x] the reload button should reread the file and do the whole parsing pipeline assuming that something went wrong
+- [x] fix screen resizing issue
 
 # Later
 
