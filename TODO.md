@@ -1,5 +1,8 @@
 # TODO:
 
+- [ ] fix screen resizing issue
+- [ ] add a back button in UI + esc as shorcut
+- [ ] add a tutorial that pops op on the first use and on every update when new features are added
 - [ ] add better default styling
   - [ ] to heading tags
 - [ ] add the cool intro example (make it prettier)
