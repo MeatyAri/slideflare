@@ -1,6 +1,6 @@
 [package]
 name = "slideflare"
-version = "0.1.0"
+version = "0.1.1"
 description = "⚡Blazing fast, interactive presentation tool for developers, educators, and creators to build and share beautiful slides effortlessly."
 authors = ["meatyari"]
 edition = "2021"
