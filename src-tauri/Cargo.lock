@@ -3934,9 +3934,9 @@ checksum = "7a2ae44ef20feb57a68b23d846850f861394c2e02dc425a50098ae8c90267589"
 
 [[package]]
 name = "slideflare"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.21.7",
  "criterion",
  "gray_matter",
  "imara-diff",

@@ -1,6 +1,5 @@
 # TODO:
 
-- [ ] add a back button in UI + esc as shorcut
 - [ ] add a tutorial that pops op on the first use and on every update when new features are added
 - [ ] add better default styling
   - [ ] to heading tags
@@ -79,3 +78,4 @@
 - [x] fix the `---` parsing problem
 - [x] find a solution for white or close to white backgrounds that make the text inisible
   - [x] the text color property is not getting applied to the heading tags
+- [x] add a back button in UI + esc as shorcut
