@@ -1,6 +1,30 @@
 <script lang="ts">
   import { shared } from './shared.svelte';
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
+  import { resolve } from '$app/paths';
+
+  function goBack() {
+    goto(resolve('/'));
+  }
+
+  let backVisible = $state(false);
+  let hideTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function revealBack() {
+    backVisible = true;
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => (backVisible = false), 2500);
+  }
+
+  function handleMouseMove(e: MouseEvent) {
+    // Reveal when cursor is near the left edge (within 120px).
+    if (e.clientX <= 120) revealBack();
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') goBack();
+  }
 
   const handleClick = (index: number) => {
     const slide = document.getElementById(String(index));
@@ -21,10 +45,15 @@
 
   onMount(() => {
     window.addEventListener('resize', handleResize);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('keydown', handleKeydown);
     handleResize();
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('keydown', handleKeydown);
+      clearTimeout(hideTimer);
     };
   });
 </script>
@@ -33,7 +62,26 @@
 
 <nav
   class="fixed top-0 left-0 z-50 flex h-full w-20 flex-col items-center bg-gradient-to-l to-gray-900/30 py-8"
+  onmouseenter={revealBack}
 >
+  <button
+    class="absolute top-4 z-50 mr-5 flex h-9 w-9 items-center justify-center rounded-full border border-gray-600 bg-gray-800/80 text-gray-200 shadow-lg backdrop-blur transition-all duration-300 hover:bg-gray-700 focus:outline-none
+      {backVisible ? 'opacity-100' : 'pointer-events-none opacity-0'}"
+    aria-label="Back to file selection"
+    title="Back (Esc)"
+    onclick={goBack}
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24">
+      <path
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M19 12H5m0 0l6 6m-6-6l6-6"
+      />
+    </svg>
+  </button>
   <div
     class="absolute transition-all delay-500 duration-300 ease-out"
     style="top: {navOffsetTop}px;"
