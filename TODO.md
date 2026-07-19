@@ -1,5 +1,8 @@
 # TODO:
 
+- [ ] create a logo and use it istead of generic tauri icon
+- [ ] centralize the versioning so you don't have to change 10 different numbers manually
+  - [ ] also add some github actions to update the AUR versions
 - [ ] add a tutorial that pops op on the first use and on every update when new features are added
 - [ ] add better default styling
   - [ ] to heading tags
