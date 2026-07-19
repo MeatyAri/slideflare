@@ -79,3 +79,19 @@ cargo bench parse            # Benchmark full parsing only
 - File watching with notify crate for hot reload
 - Event-driven communication between Rust backend and Svelte frontend
 - Static site generation via @sveltejs/adapter-static for Tauri compatibility
+
+## Versioning
+
+`package.json` is the single source of truth for the app version; `tauri.conf.json`, the frontend, and `Cargo.toml` all derive from it. Never edit versions in more than one place.
+
+- Change the version: `npm version patch` (or `minor` / `major` / an explicit `x.y.z`). This bumps `package.json`, syncs everything else via the `version` lifecycle hook, and makes the commit + tag.
+- Hand-edited `package.json` instead: run `bun run sync-version` to propagate.
+- Recover from drift (versions out of sync): set `package.json` to the desired version, then `bun run sync-version`.
+
+## Tutorial (first-launch + what's-new)
+
+Version-gated onboarding shown on the home screen only. Lives in `src/lib/tutorial/`.
+
+- Add a feature card: append a `TutorialFeature` to `TUTORIAL_FEATURES` in `features.ts`. Keep `id` stable and unique forever — gating is keyed on it. Optional `media` path is relative to `static/`. `version` is cosmetic (used only for the "what's new" header label).
+- Gating is automatic and id-based: a card is shown until the user dismisses a tutorial that included it (tracked in `tutorialSeenFeatures`). Fresh installs see the full tour; afterwards only unseen cards appear as "what's new". This works for release and HEAD-tracking git/AUR builds alike — a new card surfaces the moment its entry lands, no version bump required.
+- Cards are packed into a carousel (short one-liners grouped, `media`/long bodies get their own slide) — no layout work needed.

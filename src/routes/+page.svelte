@@ -4,9 +4,20 @@
   import { open } from '@tauri-apps/plugin-dialog';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
+  import { onMount } from 'svelte';
+  import { createTutorial } from '$lib/tutorial/tutorial.svelte';
+  import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
 
   let dragActive = $state(false);
   let error = $state('');
+
+  const tutorial = createTutorial();
+
+  onMount(() => {
+    // Gating is by feature id, so no app version is needed here; the overlay
+    // derives its "what's new" label from the newest feature it shows.
+    tutorial.init();
+  });
 
   async function handleFile(filePath: string) {
     await goto(resolve('/view-slides'));
@@ -110,3 +121,12 @@
     {/if}
   </div>
 </div>
+
+{#if tutorial.open}
+  <TutorialOverlay
+    mode={tutorial.mode}
+    version={tutorial.version}
+    slides={tutorial.slides}
+    onDismiss={() => tutorial.dismiss()}
+  />
+{/if}

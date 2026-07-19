@@ -12,6 +12,8 @@
     "tauri": "tauri",
     "format": "prettier --write .",
     "lint": "prettier --check . && eslint .",
+    "version": "node scripts/sync-version.mjs && git add src-tauri/Cargo.toml",
+    "sync-version": "node scripts/sync-version.mjs",
     "test": "cd src-tauri && cargo test"
   },
   "license": "MIT",
