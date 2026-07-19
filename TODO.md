@@ -1,9 +1,8 @@
 # TODO:
 
 - [ ] create a logo and use it istead of generic tauri icon
-- [ ] centralize the versioning so you don't have to change 10 different numbers manually
+- [x] centralize the versioning so you don't have to change 10 different numbers manually
   - [ ] also add some github actions to update the AUR versions
-- [ ] add a tutorial that pops op on the first use and on every update when new features are added
 - [ ] add better default styling
   - [ ] to heading tags
 - [ ] add the cool intro example (make it prettier)
@@ -82,3 +81,4 @@
 - [x] find a solution for white or close to white backgrounds that make the text inisible
   - [x] the text color property is not getting applied to the heading tags
 - [x] add a back button in UI + esc as shorcut
+- [x] add a tutorial that pops op on the first use and on every update when new features are added

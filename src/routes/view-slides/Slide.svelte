@@ -33,8 +33,8 @@
     class="flex shrink-0 items-center justify-center px-24"
     style="width: {DESIGN_W}px; transform: scale({scale}); transform-origin: center center;"
   >
-    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-    <article bind:clientHeight={contentHeight} class="prose prose-invert prose-xl {textColor}">
+    <article bind:clientHeight={contentHeight} class="prose prose-xl prose-invert {textColor}">
+      <!-- eslint-disable-next-line svelte/no-at-html-tags -->
       {@html content}
     </article>
   </div>

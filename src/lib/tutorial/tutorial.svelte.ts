@@ -1,4 +1,5 @@
 import { TUTORIAL_FEATURES, type TutorialFeature } from './features';
+import { SvelteSet } from 'svelte/reactivity';
 
 const SEEN_FEATURES_KEY = 'tutorialSeenFeatures';
 
@@ -82,11 +83,11 @@ export function buildSlides(features: TutorialFeature[]): TutorialSlide[] {
 export function getSeenFeatures(): Set<string> {
   try {
     const raw = localStorage.getItem(SEEN_FEATURES_KEY);
-    if (!raw) return new Set();
+    if (!raw) return new SvelteSet();
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? new Set(parsed as string[]) : new Set();
+    return Array.isArray(parsed) ? new SvelteSet(parsed as string[]) : new SvelteSet();
   } catch {
-    return new Set();
+    return new SvelteSet();
   }
 }
 
