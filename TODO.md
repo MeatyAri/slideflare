@@ -1,13 +1,12 @@
 # TODO:
 
 - [ ] create a logo and use it istead of generic tauri icon
+- [ ] a convenience option to install/update the slideflare skill after an update to the app or on first launch (maybe inside the tutorial section where we introduce it)
 - [x] centralize the versioning so you don't have to change 10 different numbers manually
   - [ ] also add some github actions to update the AUR versions
 - [ ] add better default styling
   - [ ] to heading tags
 - [ ] add the cool intro example (make it prettier)
-- [ ] publish the AI skill
-  - [ ] mention it in the readme
 - [ ] add security implications to prevent a melicious slide deck from doing XSS and other types of attacks
   - [ ] use ammonia
 - [ ] run tests on building release
@@ -82,3 +81,5 @@
   - [x] the text color property is not getting applied to the heading tags
 - [x] add a back button in UI + esc as shorcut
 - [x] add a tutorial that pops op on the first use and on every update when new features are added
+- [x] publish the AI skill
+  - [x] mention it in the readme
