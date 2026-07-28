@@ -1,6 +1,5 @@
 # TODO:
 
-- [ ] create a logo and use it istead of generic tauri icon
 - [ ] a convenience option to install/update the slideflare skill after an update to the app or on first launch (maybe inside the tutorial section where we introduce it)
 - [x] centralize the versioning so you don't have to change 10 different numbers manually
   - [ ] also add some github actions to update the AUR versions
@@ -35,6 +34,7 @@
 - [x] add to AUR
 - [x] the reload button should reread the file and do the whole parsing pipeline assuming that something went wrong
 - [x] fix screen resizing issue
+- [x] create a logo and use it instead of generic tauri icon
 
 # Later
 
