@@ -134,20 +134,19 @@ pub fn split_into_sections(content: &str) -> Result<Vec<String>, ParseError> {
     options.insert(Options::ENABLE_YAML_STYLE_METADATA_BLOCKS);
 
     // Collect all metadata block start positions with their spans
-    let metadata_blocks: Vec<(usize, usize)> =
-        pulldown_cmark::Parser::new_ext(content, options)
-            .into_offset_iter()
-            .filter_map(|(event, span)| {
-                if matches!(
-                    event,
-                    pulldown_cmark::Event::Start(pulldown_cmark::Tag::MetadataBlock(_))
-                ) {
-                    Some((span.start, span.end))
-                } else {
-                    None
-                }
-            })
-            .collect();
+    let metadata_blocks: Vec<(usize, usize)> = pulldown_cmark::Parser::new_ext(content, options)
+        .into_offset_iter()
+        .filter_map(|(event, span)| {
+            if matches!(
+                event,
+                pulldown_cmark::Event::Start(pulldown_cmark::Tag::MetadataBlock(_))
+            ) {
+                Some((span.start, span.end))
+            } else {
+                None
+            }
+        })
+        .collect();
 
     if metadata_blocks.is_empty() {
         return Err(ParseError {
