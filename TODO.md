@@ -1,8 +1,5 @@
 # TODO:
 
-- [ ] a convenience option to install/update the slideflare skill after an update to the app or on first launch (maybe inside the tutorial section where we introduce it)
-- [x] centralize the versioning so you don't have to change 10 different numbers manually
-  - [ ] also add some github actions to update the AUR versions
 - [ ] add better default styling
   - [ ] to heading tags
 - [ ] add the cool intro example (make it prettier)
@@ -30,6 +27,9 @@
 
 # Testing:
 
+- [x] centralize the versioning so you don't have to change 10 different numbers manually
+  - [x] also add some github actions to update the AUR versions
+- [x] a convenience option to install/update the slideflare skill after an update to the app or on first launch (maybe inside the tutorial section where we introduce it)
 - [ ] test the examples provided in the readme
 - [x] add to AUR
 - [x] the reload button should reread the file and do the whole parsing pipeline assuming that something went wrong
@@ -38,7 +38,6 @@
 
 # Later
 
-- [ ] add a help menu
 - [ ] add convert to pdf
 - [ ] add custom code component
 
@@ -83,3 +82,4 @@
 - [x] add a tutorial that pops op on the first use and on every update when new features are added
 - [x] publish the AI skill
   - [x] mention it in the readme
+- [x] add a help menu

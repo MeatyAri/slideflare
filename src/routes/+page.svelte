@@ -7,11 +7,14 @@
   import { onMount } from 'svelte';
   import { createTutorial } from '$lib/tutorial/tutorial.svelte';
   import TutorialOverlay from '$lib/tutorial/TutorialOverlay.svelte';
+  import { createUpdates } from '$lib/updates/updates.svelte';
+  import UpdateDialog from '$lib/updates/UpdateDialog.svelte';
 
   let dragActive = $state(false);
   let error = $state('');
 
   const tutorial = createTutorial();
+  const updates = createUpdates();
 
   onMount(() => {
     // Gating is by feature id, so no app version is needed here; the overlay
@@ -84,8 +87,26 @@
 </script>
 
 <div
-  class="flex min-h-screen flex-col items-center justify-center bg-gray-900 text-gray-100 select-none"
+  class="relative flex min-h-screen flex-col items-center justify-center bg-gray-900 text-gray-100 select-none"
 >
+  <button
+    class="absolute top-4 right-4 flex items-center gap-2 rounded-md border border-gray-700 bg-gray-800/80 px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-700 hover:text-gray-100 focus:outline-none"
+    onclick={() => updates.openDialog()}
+    aria-label="Check for app and skill updates"
+    title="Check for updates"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24">
+      <path
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4h-4"
+      />
+    </svg>
+    Check for updates
+  </button>
   <div
     class={`w-full max-w-lg cursor-pointer rounded-lg border-2 border-dashed p-8 transition-colors
             ${dragActive ? 'border-blue-500 bg-blue-800' : 'border-gray-700 bg-gray-800'}`}
@@ -128,5 +149,23 @@
     version={tutorial.version}
     slides={tutorial.slides}
     onDismiss={() => tutorial.dismiss()}
+    onInstallSkill={() => updates.installSkill()}
+    installingSkill={updates.installingSkill}
+    skillMessage={updates.skillMessage}
+    skillError={updates.skillError}
+  />
+{/if}
+
+{#if updates.open}
+  <UpdateDialog
+    checking={updates.checking}
+    status={updates.status}
+    installingSkill={updates.installingSkill}
+    skillMessage={updates.skillMessage}
+    skillError={updates.skillError}
+    onClose={() => updates.close()}
+    onRecheck={() => updates.check()}
+    onChooseInstallSource={(source) => updates.chooseInstallSource(source)}
+    onInstallSkill={() => updates.installSkill()}
   />
 {/if}

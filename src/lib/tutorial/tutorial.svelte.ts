@@ -51,6 +51,8 @@ export function featuresToShow(seen: Set<string>): TutorialFeature[] {
  *
  * Rules:
  *   - A feature with media always gets its own slide.
+ *   - A feature offering the skill install always gets its own slide, so its
+ *     action button has room.
  *   - A feature with a long body (no media) gets its own slide.
  *   - Short one-liners (no media, body <= SHORT_BODY_MAX) are batched together,
  *     up to MAX_GROUP_SIZE per slide, so a lone sentence never wastes a slide.
@@ -66,7 +68,7 @@ export function buildSlides(features: TutorialFeature[]): TutorialSlide[] {
   };
 
   for (const f of features) {
-    const isShort = !f.media && f.body.length <= SHORT_BODY_MAX;
+    const isShort = !f.media && !f.skillInstall && f.body.length <= SHORT_BODY_MAX;
     if (isShort) {
       pending.push(f);
       if (pending.length >= MAX_GROUP_SIZE) flush();

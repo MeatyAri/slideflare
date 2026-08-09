@@ -53,6 +53,12 @@ jobs:
       - name: install frontend dependencies
         run: bun install # change this to npm, pnpm or bun depending on which one you use.
 
+      - name: Set install source and commit for build
+        shell: bash
+        run: |
+          echo "SLIDEFLARE_INSTALL_SOURCE=github" >> $GITHUB_ENV
+          echo "SLIDEFLARE_GIT_COMMIT=$(git rev-parse HEAD)" >> $GITHUB_ENV
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

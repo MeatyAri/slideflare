@@ -32,6 +32,12 @@ export interface TutorialFeature {
    * always gets its own carousel slide.
    */
   media?: string;
+  /**
+   * Marks the card that offers to install/update the slideflare-slides skill.
+   * The overlay renders an install button on it. Only one feature should set
+   * this.
+   */
+  skillInstall?: boolean;
 }
 
 export const TUTORIAL_FEATURES: TutorialFeature[] = [
@@ -81,7 +87,8 @@ export const TUTORIAL_FEATURES: TutorialFeature[] = [
     id: 'ai-decks',
     version: '0.1.0',
     title: 'Generate decks with AI',
-    body: 'Use the slideflare-slides skill to turn a plain-language prompt into a complete, styled Markdown deck.'
+    body: 'Use the slideflare-slides skill to turn a plain-language prompt into a complete, styled Markdown deck. Install it into ~/.agents/skills/ with one click — your agent picks it up automatically.',
+    skillInstall: true
   },
   {
     id: 'reload',
@@ -94,5 +101,11 @@ export const TUTORIAL_FEATURES: TutorialFeature[] = [
     version: '0.1.1',
     title: 'Exit to home',
     body: 'Press Esc or click the back button to return to the file picker.'
+  },
+  {
+    id: 'updates',
+    version: '0.1.2',
+    title: 'Check for updates',
+    body: 'The button on the home screen checks for both app and skill updates in one go.'
   }
 ];

@@ -8,9 +8,23 @@
     version: string;
     slides: TutorialSlide[];
     onDismiss: () => void;
+    /** Install/update the slideflare-slides skill from the skill card. */
+    onInstallSkill: () => void;
+    installingSkill: boolean;
+    skillMessage: string;
+    skillError: string;
   }
 
-  let { mode, version, slides, onDismiss }: Props = $props();
+  let {
+    mode,
+    version,
+    slides,
+    onDismiss,
+    onInstallSkill,
+    installingSkill,
+    skillMessage,
+    skillError
+  }: Props = $props();
 
   let page = $state(0);
 
@@ -109,6 +123,21 @@
               {/if}
               <h3 class="text-xl font-semibold text-gray-100">{feature.title}</h3>
               <p class="max-w-md text-sm leading-relaxed text-gray-300">{feature.body}</p>
+              {#if feature.skillInstall}
+                <button
+                  class="mt-1 rounded-md bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={installingSkill}
+                  onclick={onInstallSkill}
+                >
+                  {installingSkill ? 'Installing…' : 'Install skill'}
+                </button>
+                {#if skillMessage}
+                  <p class="max-w-md text-xs break-all text-green-400">{skillMessage}</p>
+                {/if}
+                {#if skillError}
+                  <p class="max-w-md text-xs break-all text-red-400">{skillError}</p>
+                {/if}
+              {/if}
             </div>
           {/if}
         </div>

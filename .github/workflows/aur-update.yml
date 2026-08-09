@@ -1,0 +1,105 @@
+name: 'Update AUR packages'
+
+# Keeps the two AUR packages in sync with this repo.
+#
+#   slideflare-git  -> built from HEAD. `pkgver()` resolves the real version at
+#                      build time, but paru/yay decide whether an update exists
+#                      from the *static* pkgver published in .SRCINFO via the AUR
+#                      RPC. If that value is a placeholder it never matches what
+#                      users have installed and the package looks permanently out
+#                      of date, so we write the real version on every push.
+#   slideflare      -> pinned to a release, bumped when an `app-v*` tag lands.
+#
+# Requires an `AUR_SSH_PRIVATE_KEY` secret: the private half of the SSH key
+# registered on the AUR account.
+
+on:
+  push:
+    branches: [main]
+    tags: ['app-v*']
+  workflow_dispatch:
+
+jobs:
+  aur:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+        with:
+          # Full history + tags: `git describe` needs both to build the version.
+          fetch-depth: 0
+
+      - name: Work out which package to update
+        id: target
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/app-v* ]]; then
+            version="${GITHUB_REF#refs/tags/app-v}"
+            echo "package=slideflare" >> "$GITHUB_OUTPUT"
+            echo "version=$version"   >> "$GITHUB_OUTPUT"
+            echo "Stable release $version"
+          else
+            # e.g. app-v0.1.1-7-gfa552e0 -> 0.1.1.r7.gfa552e0
+            # Mirrors pkgver() in the PKGBUILD; keep the two in step.
+            describe=$(git describe --long --tags --abbrev=7)
+            version=$(printf '%s' "${describe#app-v}" | sed 's/\([^-]*-g\)/r\1/; s/-/./g')
+            echo "package=slideflare-git" >> "$GITHUB_OUTPUT"
+            echo "version=$version"       >> "$GITHUB_OUTPUT"
+            echo "Git package at $version"
+          fi
+
+      - name: Set up SSH for the AUR
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          cat >> ~/.ssh/config <<'EOF'
+          Host aur.archlinux.org
+            User aur
+            IdentityFile ~/.ssh/aur
+            StrictHostKeyChecking accept-new
+          EOF
+
+      - name: Clone the AUR package
+        run: git clone "ssh://aur@aur.archlinux.org/${{ steps.target.outputs.package }}.git" pkg
+
+      - name: Update PKGBUILD
+        working-directory: pkg
+        env:
+          VERSION: ${{ steps.target.outputs.version }}
+        run: |
+          # Both packages get a real pkgver written in, and pkgrel reset, since
+          # in both cases this is a new upstream version rather than a rebuild of
+          # the same one.
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
+          sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+          grep -E '^(pkgver|pkgrel)=' PKGBUILD
+
+      - name: Regenerate .SRCINFO
+        run: |
+          # makepkg refuses to run as root, hence the unprivileged user. Note
+          # --printsrcinfo does not execute pkgver(), so it emits the static
+          # value written above without needing to clone any sources.
+          docker run --rm -v "$PWD/pkg:/pkg" archlinux:base-devel bash -c '
+            useradd -m build &&
+            chown -R build /pkg &&
+            cd /pkg &&
+            su build -c "makepkg --printsrcinfo" > .SRCINFO
+          '
+          grep -E '^\s*(pkgver|pkgrel)' pkg/.SRCINFO
+
+      - name: Commit and push to the AUR
+        working-directory: pkg
+        env:
+          VERSION: ${{ steps.target.outputs.version }}
+        run: |
+          git config user.name "MeatyAri"
+          git config user.email "meatyari@users.noreply.github.com"
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "Already at ${VERSION}, nothing to push."
+            exit 0
+          fi
+          git commit -m "Update to ${VERSION}"
+          git push origin HEAD:master
