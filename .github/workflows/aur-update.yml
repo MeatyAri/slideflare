@@ -59,13 +59,27 @@ jobs:
           chmod 600 ~/.ssh/aur
           # Fail here with a clear message rather than at `git clone`.
           if ! ssh-keygen -y -P "" -f ~/.ssh/aur > /dev/null 2>&1; then
-            echo "::error::AUR_SSH_PRIVATE_KEY could not be loaded. Checks:"
-            echo "::error::  1. Store the PRIVATE key (-----BEGIN OPENSSH PRIVATE KEY-----), not the .pub half."
-            echo "::error::  2. Paste it verbatim with its line breaks intact -- a key flattened onto one line will not load."
-            echo "::error::  3. The key must have no passphrase; CI cannot type one."
-            echo "--- what actually landed on disk (structure only, no key material) ---"
-            head -1 ~/.ssh/aur
-            echo "lines: $(wc -l < ~/.ssh/aur)"
+            echo "::error::AUR_SSH_PRIVATE_KEY could not be loaded."
+            # Only derived booleans/counts are printed. Never the key material:
+            # GitHub masks each line of a multiline secret, so echoing content
+            # would show as *** anyway and risks leaking via a partial match.
+            first=$(head -1 ~/.ssh/aur)
+            last=$(tail -1 ~/.ssh/aur)
+            echo "lines:            $(wc -l < ~/.ssh/aur)  (an unencrypted ed25519 key is ~7)"
+            case "$first" in
+              *"BEGIN OPENSSH PRIVATE KEY"*) echo "header:           ok" ;;
+              *"BEGIN"*"PRIVATE KEY"*)      echo "header:           ok (non-OpenSSH format)" ;;
+              *"PUBLIC KEY"*|ssh-*)          echo "header:           this is a PUBLIC key -- store the private half" ;;
+              *) echo "header:           missing a BEGIN line -- first line is not a PEM header" ;;
+            esac
+            case "$last" in
+              *"END"*"PRIVATE KEY"*) echo "footer:           ok" ;;
+              *) echo "footer:           missing the END line -- the paste looks truncated" ;;
+            esac
+            grep -q "ENCRYPTED" ~/.ssh/aur \
+              && echo "passphrase:       key is encrypted -- CI cannot type a passphrase, use an unencrypted key"
+            echo "Regenerate with: ssh-keygen -t ed25519 -N '' -f aur_key"
+            echo "then paste aur_key verbatim into the secret and add aur_key.pub to the AUR account."
             exit 1
           fi
           cat >> ~/.ssh/config <<'EOF'
