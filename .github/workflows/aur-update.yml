@@ -52,8 +52,22 @@ jobs:
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          # A malformed key fails with a bare "error in libcrypto" at clone
+          # time, which says nothing useful. Normalise CRLF (browser/Windows
+          # paste) and guarantee a trailing newline, then validate up front.
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/aur
           chmod 600 ~/.ssh/aur
+          # Fail here with a clear message rather than at `git clone`.
+          if ! ssh-keygen -y -P "" -f ~/.ssh/aur > /dev/null 2>&1; then
+            echo "::error::AUR_SSH_PRIVATE_KEY could not be loaded. Checks:"
+            echo "::error::  1. Store the PRIVATE key (-----BEGIN OPENSSH PRIVATE KEY-----), not the .pub half."
+            echo "::error::  2. Paste it verbatim with its line breaks intact -- a key flattened onto one line will not load."
+            echo "::error::  3. The key must have no passphrase; CI cannot type one."
+            echo "--- what actually landed on disk (structure only, no key material) ---"
+            head -1 ~/.ssh/aur
+            echo "lines: $(wc -l < ~/.ssh/aur)"
+            exit 1
+          fi
           cat >> ~/.ssh/config <<'EOF'
           Host aur.archlinux.org
             User aur
