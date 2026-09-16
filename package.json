@@ -14,7 +14,8 @@
     "lint": "prettier --check . && eslint .",
     "version": "node scripts/sync-version.mjs && git add src-tauri/Cargo.toml",
     "sync-version": "node scripts/sync-version.mjs",
-    "test": "cd src-tauri && cargo test"
+    "test": "cd src-tauri && cargo test",
+    "bench": "cd src-tauri && cargo bench"
   },
   "license": "MIT",
   "dependencies": {
