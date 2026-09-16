@@ -1,0 +1,1 @@
+/home/meaty/code/slideflare/AGENTS.md
