@@ -1,0 +1,194 @@
+# Testing the platform-dependent export code
+
+Status as of 2026-09-16. Tier 1 is implemented; tiers 2–4 are planned.
+
+## The problem
+
+PDF export is implemented three times — once per platform — against three
+unrelated native APIs:
+
+| Platform    | Backend                          | Entry point                           |
+| ----------- | -------------------------------- | ------------------------------------- |
+| Linux / BSD | WebKitGTK + GTK print            | `src-tauri/src/export/pdf_linux.rs`   |
+| Windows     | WebView2 `PrintToPdf`            | `src-tauri/src/export/pdf_windows.rs` |
+| macOS       | `WKWebView` + `NSPrintOperation` | `src-tauri/src/export/pdf_macos.rs`   |
+
+Only the Linux backend has ever been executed. Windows and macOS type-check
+against the real APIs but are runtime-unverified.
+
+Worse, until Tier 1 landed, the only workflow that compiled the Rust side at all
+(`.github/workflows/tauri-action.yml`) triggered on `push: tags: ['app-v*']`.
+A Windows- or macOS-only compile break was therefore discovered _at release
+time, on a tag_ — the most expensive possible moment.
+
+This is not hypothetical. During implementation, `printOperationWithPrintInfo:`
+turned out to live inside an `#[cfg(feature = "objc2-app-kit")] impl WKWebView`
+block, so `objc2-web-kit` needed `features = ["WKWebView", "objc2-app-kit"]`.
+That bug was caught only because a throwaway scratch crate was built by hand to
+type-check the macOS path. Nothing in the repo would have caught it.
+
+## Tier 1 — compile coverage on every push (implemented)
+
+`.github/workflows/ci.yml` runs on push to `main`, on pull requests, and on
+manual dispatch.
+
+Two jobs:
+
+- **frontend** (ubuntu only) — `bun run lint`, `bun run check`, `bun run build`.
+- **rust** (matrix: `ubuntu-22.04`, `windows-latest`, `macos-latest`) —
+  `cargo fmt --check` (Linux only; formatting is platform-independent),
+  `cargo clippy --all-targets -- -D warnings`, `cargo test`.
+
+This is the highest value per unit of effort by a wide margin. It needs no
+webview, no display server, and no printer, yet it catches the entire class of
+bug that actually occurred: wrong feature flag, wrong signature, missing `cfg`
+arm. It also compiles `pdf_unsupported.rs`, which no other job ever reaches.
+
+Two implementation notes, both verified empirically rather than assumed:
+
+- The Rust jobs do **not** need the frontend built. `tauri.conf.json` sets
+  `frontendDist: "../build"` and `/build` is gitignored, so the obvious worry is
+  that `generate_context!` would fail on a fresh checkout. It does not — this
+  was tested by moving `build/` aside and forcing both `lib.rs` and `build.rs`
+  to recompile. So the Rust job skips bun entirely.
+- The Linux runner needs `libwebkit2gtk-4.1-dev` and friends installed before
+  `cargo check`, because the `webkit2gtk`, `gtk`, and `glib` crates resolve
+  system libraries through `pkg-config` at build time. Windows and macOS need no
+  extra system packages.
+
+### Known limit
+
+The matrix checks one native target per OS. Release builds both
+`aarch64-apple-darwin` and `x86_64-apple-darwin`, so an arch-specific break on
+macOS could still escape. Judged acceptable: the platform-conditional code is
+gated on `target_os`, never on architecture, and adding a second Apple target
+would recompile every dependency for marginal coverage.
+
+## Tier 2 — runtime smoke test, via the planned CLI (deferred)
+
+Compile coverage proves the code builds, not that it prints. For that, a real
+webview has to run on each OS.
+
+### Why this waits for the CLI
+
+A CLI is planned for the project. It is a strictly better vehicle for this test
+than a dedicated test harness, so Tier 2 is deliberately deferred until it
+lands, rather than building a harness that would immediately rot.
+
+What the CLI **cannot** remove: the webview _is_ the PDF renderer.
+`print_to_pdf` takes a `&WebviewWindow` and calls `with_webview` to reach the
+real `WKWebView` / `ICoreWebView2` / `webkit2gtk::WebView`. No webview, no PDF.
+A CLI changes who pushes the button, not what renders.
+
+What the CLI **does** remove, which is the expensive half:
+
+- No `tauri-driver` / WebDriver dependency — which had no macOS support anyway,
+  meaning it would have covered the two platforms that need it least.
+- No test-only binary to drift out of sync with the shipping code path.
+- CI exercises the code users actually run.
+- Fixture path, output path, and exit code become plain argv and process exit,
+  trivially assertable from a shell script.
+
+`cargo test` still cannot do this — it needs a real webview and a display — but
+`slideflare export pdf fixture.md -o out.pdf` as a CI step is far cleaner than a
+bespoke harness.
+
+### Display requirements stay, per platform
+
+Unchanged by the CLI:
+
+- **Linux** — GTK needs `DISPLAY` or `WAYLAND_DISPLAY`; `gtk_init` fails
+  outright without one. Requires `xvfb-run`.
+- **Windows** — WebView2 needs an `HWND` to create a controller. A hidden window
+  is fine. Needs the WebView2 runtime present on the runner (believed
+  preinstalled on the Windows Server images — confirm before relying on it).
+- **macOS** — `NSPrintOperation` needs AppKit with a window server session. Set
+  the activation policy to accessory/prohibited to avoid a dock icon. GitHub's
+  macOS runners do provide a session, but headless `runOperation()` is the
+  least-trusted piece of the whole feature and may need
+  `runOperationModalForWindow:` instead.
+
+### The design catch worth planning around
+
+As documented in `src-tauri/src/export.rs`, PDF export deliberately prints the
+**live, realized** webview, because layout, font resolution, and MathML
+measurement are already settled there. An unrealized widget carries no such
+guarantee from either GTK or WebKit.
+
+So a naive `visible: false` window is the risky choice — on GTK an unmapped
+window may never realize. The safer shape is a window that is realized but
+positioned offscreen, or simply visible on the virtual display. Either way the
+CLI needs the same "deck has finished laying out" signal the GUI path gets, not
+merely "file parsed". That readiness signal is the one genuine piece of new
+design work CLI export mode adds.
+
+### HTML export has the same shape
+
+`harvestCss()` in `src/lib/export/standalone.ts` walks `document.styleSheets` to
+capture the stylesheet Tailwind's browser build generates **at runtime**. There
+is no stylesheet on disk to read instead. So CLI HTML export also needs a live
+webview — either evaluating `buildStandaloneHtml()` inside it, or a Rust-side
+reimplementation that would immediately drift. Evaluate it in the webview.
+
+Good news: same window, same readiness signal. One mechanism serves both
+exports.
+
+## Tier 3 — what to assert
+
+This matters more than the harness does. The dangerous failure mode is not a
+crash; it is a PDF that is produced but blank. That is silent, and a page-count
+check will not catch it.
+
+Assertions, in order of importance:
+
+1. File exists and is non-trivial in size.
+2. Page count equals slide count.
+3. Every `MediaBox` equals `[0 0 960 540]`.
+4. The dominant colour of page N matches that slide's frontmatter `bg_color`.
+
+Number 4 is the real regression guard: it is what catches `print-color-adjust`
+breaking, or a white/empty page. Items 2 and 3 are cheap regex over the PDF
+bytes and work on all three runners. Item 4 needs a rasterizer (`pdftoppm` is
+trivial on Linux, awkward elsewhere), so run structure checks everywhere and the
+colour check on Linux only.
+
+Avoid pixel-golden diffs. Font rasterization differs per platform and they will
+flap.
+
+## Tier 4 — coverage automation cannot reach
+
+Short pre-release manual pass:
+
+- A Linux box **with** CUPS configured. The development machine had no `lpr` at
+  all, so the happy path with a real default printer is unexercised.
+- Wayland and X11 separately.
+- An old WebView2 runtime, to confirm the version-cast error message is what
+  users actually see.
+- A deck with embedded video.
+- A non-English locale (see below), if not automated.
+
+## The locale risk
+
+`print_to_file_printer()` in `pdf_linux.rs` resolves GTK's virtual printer name
+through `glib::dgettext(Some("gtk30"), "Print to File")`, because GTK registers
+that printer under a _translated_ name. Setting `output-uri` alone is not
+enough — without naming the printer, GTK falls through to the default backend
+and tries to spawn `lpr`, which is exactly the failure this guards against.
+
+In an English locale `dgettext` trivially returns its input, so the lookup is
+currently untested in the one situation it exists for. Running the Linux smoke
+test a second time under `LC_ALL=de_DE.UTF-8`, with GTK's message catalogues
+installed, would actually prove it.
+
+## Testing the HTML export
+
+Mostly platform-independent and much easier. `buildStandaloneHtml` is nearly
+pure, so a unit test could cover escaping, slide markup, and structure with a
+stubbed `document.styleSheets`.
+
+Note honestly what that would _not_ have caught: the single-page bug, where
+`#sf-deck` inherited `flex flex-col` while also being given `height: 100%`, so
+every `h-screen` child was flex-shrunk into one viewport. That was a layout
+failure visible only when rendered. The check that would have caught it is
+loading the export in WebKitGTK and asserting page count — and that one runs
+fine on Linux CI.

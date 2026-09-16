@@ -1,0 +1,94 @@
+name: 'ci'
+
+# Compile coverage on every change. The publish workflow only runs on `app-v*`
+# tags, so without this a Windows- or macOS-only break stays invisible until a
+# release is cut. The PDF export backends are implemented three times over
+# three unrelated native APIs, and a broken feature flag or signature in any of
+# them is caught here rather than on a tag.
+#
+# See docs/testing-platform-exports.md for what this does and does not cover.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'LICENSE']
+  pull_request:
+    paths-ignore: ['**.md', 'LICENSE']
+  workflow_dispatch:
+
+# A newer push supersedes an in-flight run on the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Type check
+        run: bun run check
+
+      # Catches build-only breakage (adapter-static, import resolution) that
+      # neither svelte-check nor eslint sees.
+      - name: Build
+        run: bun run build
+
+  rust:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ubuntu-22.04, windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # The webkit2gtk/gtk/glib crates resolve system libraries through
+      # pkg-config at build time, so these are needed even to type-check.
+      # Windows (webview2-com) and macOS (objc2) need no extra packages.
+      - name: Install system dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      # Formatting is platform-independent; checking it once is enough.
+      - name: Check formatting
+        if: matrix.platform == 'ubuntu-22.04'
+        working-directory: src-tauri
+        run: cargo fmt --check
+
+      # --all-targets so benches and tests are compiled too, not just the lib.
+      # No frontend build is needed first: generate_context! tolerates a missing
+      # frontendDist directory (verified by removing build/ and forcing both
+      # lib.rs and build.rs to recompile).
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        working-directory: src-tauri
+        run: cargo test
