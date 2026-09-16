@@ -95,6 +95,10 @@ jobs:
             cd /pkg &&
             su build -c "makepkg --printsrcinfo" > .SRCINFO
           '
+          # Container chown leaves pkg/.git owned by the container uid, so the
+          # next git step fails with "could not lock config file .git/config:
+          # Permission denied". Take ownership back.
+          sudo chown -R "$(id -u):$(id -g)" pkg
           grep -E '^\s*(pkgver|pkgrel)' pkg/.SRCINFO
 
       - name: Commit and push to the AUR
