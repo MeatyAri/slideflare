@@ -38,7 +38,6 @@
 
 # Later
 
-- [ ] add convert to pdf
 - [ ] add custom code component
 
 # Done
@@ -83,3 +82,6 @@
 - [x] publish the AI skill
   - [x] mention it in the readme
 - [x] add a help menu
+- [x] add convert to pdf
+  - native per-platform webview printing: WebKitGTK print-to-file, WebView2 `PrintToPdf`, WKWebView `NSPrintOperation`
+- [x] add export to a self-contained HTML file (single file, offline, keyboard-navigable)

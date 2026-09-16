@@ -35,9 +35,16 @@ interface SharedState {
   index: number;
   slides: Slide[];
   error: ParseError | null;
+  /**
+   * While true the deck lays itself out for paper instead of for the window:
+   * every slide is scaled against the fixed design resolution rather than the
+   * viewport. The PDF export sets this before handing the live webview to the
+   * platform print pipeline, and clears it once the export reports back.
+   */
+  printMode: boolean;
 }
 
-export type { ParseError };
+export type { ParseError, Slide };
 
 export type NotificationColor = 'blue' | 'red' | 'yellow';
 
@@ -65,7 +72,8 @@ export function dismissNotification(id: number): void {
 export const shared: SharedState = $state({
   index: 0,
   slides: JSON.parse(localStorage.getItem('slides') || '[]') as Slide[],
-  error: null
+  error: null,
+  printMode: false
 });
 
 export function applySlideChange(event: SlideChangeEvent): void {

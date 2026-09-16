@@ -30,6 +30,13 @@ impl Default for AppState {
     }
 }
 
+impl AppState {
+    /// Path of the Markdown file currently being watched, if any.
+    pub fn file_path(&self) -> Option<String> {
+        self.file_path.lock().unwrap().clone()
+    }
+}
+
 /// State for incremental slide processing
 #[derive(Debug)]
 struct IncrementalState {

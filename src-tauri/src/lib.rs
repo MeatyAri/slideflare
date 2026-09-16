@@ -1,8 +1,10 @@
+pub mod export;
 pub mod incremental;
 pub mod parser;
 pub mod updater;
 mod watcher;
 
+use crate::export::{current_file_path, export_pdf, write_export};
 use crate::updater::{check_updates, install_skill};
 use crate::watcher::{reparse_document, start_file_watcher, AppState};
 
@@ -16,7 +18,10 @@ pub fn run() {
             start_file_watcher,
             reparse_document,
             check_updates,
-            install_skill
+            install_skill,
+            write_export,
+            current_file_path,
+            export_pdf
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

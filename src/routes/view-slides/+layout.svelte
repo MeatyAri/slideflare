@@ -73,7 +73,10 @@
 
 {@render children()}
 
-<div class="pointer-events-none fixed right-6 bottom-6 z-50 flex flex-col items-end gap-2">
+<div
+  class="pointer-events-none fixed right-6 bottom-6 z-50 flex flex-col items-end gap-2"
+  data-no-print
+>
   {#each notifications as notification (notification.id)}
     <Notification id={notification.id} message={notification.message} color={notification.color} />
   {/each}

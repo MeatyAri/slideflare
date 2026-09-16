@@ -107,5 +107,11 @@ export const TUTORIAL_FEATURES: TutorialFeature[] = [
     version: '0.1.2',
     title: 'Check for updates',
     body: 'The button on the home screen checks for both app and skill updates in one go.'
+  },
+  {
+    id: 'export',
+    version: '0.1.3',
+    title: 'Export your deck',
+    body: 'Move the cursor to the left edge while presenting to reveal the export buttons, or press Ctrl + E for PDF. The HTML export is a single self-contained file — images and video included — that opens and navigates in any browser, with no internet needed.'
   }
 ];

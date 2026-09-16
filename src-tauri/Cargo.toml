@@ -40,6 +40,38 @@ tar = "0.4"
 dirs = "6"
 which = "7"
 
+# Platform webview handles, used only by the native PDF export in `export::pdf_*`.
+# Versions are pinned to whatever wry/tauri already resolve to so cargo unifies
+# them into a single build of each crate rather than adding a second copy.
+[target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
+webkit2gtk = "2.0"
+gtk = "0.18"
+glib = "0.18"
+
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.38"
+windows = { version = "0.61", features = ["Win32_Foundation"] }
+windows-core = "0.61"
+
+# objc2-app-kit's printing types and objc2-foundation's NSURL live behind
+# features wry does not enable, so they are turned on here.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = [
+  "NSURL",
+  "NSString",
+  "NSDictionary",
+  "NSGeometry",
+  "NSObject",
+] }
+objc2-app-kit = { version = "0.3", features = [
+  "NSPrintInfo",
+  "NSPrintOperation",
+] }
+# `printOperationWithPrintInfo:` lives in a `WKWebView` impl block gated behind
+# objc2-web-kit's own `objc2-app-kit` feature, which wry does not enable.
+objc2-web-kit = { version = "0.3", features = ["WKWebView", "objc2-app-kit"] }
+
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
 

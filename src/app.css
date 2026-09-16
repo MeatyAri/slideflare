@@ -40,3 +40,63 @@
     color: inherit;
   }
 }
+
+/*
+ * PDF export.
+ *
+ * The PDF is produced by handing the *live* deck webview to the platform's own
+ * print pipeline, so these rules are what turn the scrolling presentation into
+ * paginated pages. The frontend sets `printMode` first, which fixes each slide's
+ * scale to the design resolution instead of the window size; these rules then
+ * give each slide exactly one page.
+ *
+ * Page size is 960pt x 540pt, which is exactly 1280x720 CSS px — the deck's
+ * design resolution (DESIGN_W/DESIGN_H). Matching it precisely matters: a page
+ * even slightly smaller than its slide spills a blank page after every slide.
+ * The same values are set natively per platform in `src-tauri/src/export/`.
+ */
+@media print {
+  @page {
+    size: 960pt 540pt;
+    margin: 0;
+  }
+
+  html,
+  body {
+    overflow: visible !important;
+    height: auto !important;
+    background: #fff;
+  }
+
+  /* Chrome/WebView2 honour the shorthand; WebKit still wants the prefix.
+     Without this every slide background colour is dropped. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Navigation rail, notifications, anything else screen-only. */
+  nav,
+  [data-no-print] {
+    display: none !important;
+  }
+
+  main {
+    display: block !important;
+  }
+
+  main > section {
+    display: flex !important;
+    width: 1280px !important;
+    height: 720px !important;
+    overflow: hidden !important;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  /* A trailing break would add one empty page at the end of the deck. */
+  main > section:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}

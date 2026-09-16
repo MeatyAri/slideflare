@@ -4,6 +4,14 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
 
+  interface Props {
+    onExportHtml: () => void;
+    onExportPdf: () => void;
+    exportDisabled?: boolean;
+  }
+
+  let { onExportHtml, onExportPdf, exportDisabled = false }: Props = $props();
+
   function goBack() {
     goto(resolve('/'));
   }
@@ -64,24 +72,70 @@
   class="fixed top-0 left-0 z-50 flex h-full w-20 flex-col items-center bg-gradient-to-l to-gray-900/30 py-8"
   onmouseenter={revealBack}
 >
-  <button
-    class="absolute top-4 z-50 mr-5 flex h-9 w-9 items-center justify-center rounded-full border border-gray-600 bg-gray-800/80 text-gray-200 shadow-lg backdrop-blur transition-all duration-300 hover:bg-gray-700 focus:outline-none
+  <!-- Revealed together with the back button, on the same left-edge hover, so
+       nothing overlays the deck while presenting. -->
+  <div
+    class="absolute top-4 z-50 mr-5 flex flex-col items-center gap-2 transition-all duration-300
       {backVisible ? 'opacity-100' : 'pointer-events-none opacity-0'}"
-    aria-label="Back to file selection"
-    title="Back (Esc)"
-    onclick={goBack}
   >
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24">
-      <path
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M19 12H5m0 0l6 6m-6-6l6-6"
-      />
-    </svg>
-  </button>
+    <button
+      class="flex h-9 w-9 items-center justify-center rounded-full border border-gray-600 bg-gray-800/80 text-gray-200 shadow-lg backdrop-blur transition-colors hover:bg-gray-700 focus:outline-none"
+      aria-label="Back to file selection"
+      title="Back (Esc)"
+      onclick={goBack}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24">
+        <path
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M19 12H5m0 0l6 6m-6-6l6-6"
+        />
+      </svg>
+    </button>
+
+    <button
+      class="flex h-9 w-9 items-center justify-center rounded-full border border-gray-600 bg-gray-800/80 text-gray-200 shadow-lg backdrop-blur transition-colors hover:bg-gray-700 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+      aria-label="Export deck to PDF"
+      title="Export to PDF"
+      disabled={exportDisabled}
+      onclick={onExportPdf}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+          <path
+            stroke-linejoin="round"
+            d="M19 10v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5z"
+          />
+          <path d="M9 14h6m-6 3h4" />
+        </g>
+      </svg>
+    </button>
+
+    <button
+      class="flex h-9 w-9 items-center justify-center rounded-full border border-gray-600 bg-gray-800/80 text-gray-200 shadow-lg backdrop-blur transition-colors hover:bg-gray-700 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+      aria-label="Export deck to a self-contained HTML file"
+      title="Export to HTML"
+      disabled={exportDisabled}
+      onclick={onExportHtml}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24">
+        <g
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 9l-3 3l3 3m6-6l3 3l-3 3" />
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+        </g>
+      </svg>
+    </button>
+  </div>
   <div
     class="absolute transition-all delay-500 duration-300 ease-out"
     style="top: {navOffsetTop}px;"
