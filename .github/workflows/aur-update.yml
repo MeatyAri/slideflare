@@ -12,12 +12,23 @@ name: 'Update AUR packages'
 #
 # Requires an `AUR_SSH_PRIVATE_KEY` secret: the private half of the SSH key
 # registered on the AUR account.
+#
+# Manual backfill: workflow_dispatch with package=slideflare re-pushes the
+# latest app-v* release (used when a tag run failed and the stable package
+# went stale).
 
 on:
   push:
     branches: [main]
     tags: ['app-v*']
   workflow_dispatch:
+    inputs:
+      package:
+        description: 'Which AUR package to update'
+        required: false
+        default: 'auto'
+        type: choice
+        options: [auto, slideflare, slideflare-git]
 
 jobs:
   aur:
@@ -32,14 +43,21 @@ jobs:
       - name: Work out which package to update
         id: target
         run: |
+          input="${{ inputs.package }}"
           if [[ "$GITHUB_REF" == refs/tags/app-v* ]]; then
             version="${GITHUB_REF#refs/tags/app-v}"
             echo "package=slideflare" >> "$GITHUB_OUTPUT"
             echo "version=$version"   >> "$GITHUB_OUTPUT"
             echo "Stable release $version"
+          elif [[ "$input" == "slideflare" ]]; then
+            # Manual backfill from main: latest app-v* tag.
+            version=$(git describe --tags --abbrev=0 | sed 's/^app-v//')
+            echo "package=slideflare" >> "$GITHUB_OUTPUT"
+            echo "version=$version"   >> "$GITHUB_OUTPUT"
+            echo "Stable backfill $version"
           else
             # e.g. app-v0.1.1-7-gfa552e0 -> 0.1.1.r7.gfa552e0
-            # Mirrors pkgver() in the PKGBUILD; keep the two in step.
+            # Mirrors pkgver() in the -git PKGBUILD; keep the two in step.
             describe=$(git describe --long --tags --abbrev=7)
             version=$(printf '%s' "${describe#app-v}" | sed 's/\([^-]*-g\)/r\1/; s/-/./g')
             echo "package=slideflare-git" >> "$GITHUB_OUTPUT"
@@ -76,12 +94,32 @@ jobs:
         working-directory: pkg
         env:
           VERSION: ${{ steps.target.outputs.version }}
+          PACKAGE: ${{ steps.target.outputs.package }}
         run: |
           # Both packages get a real pkgver written in, and pkgrel reset, since
           # in both cases this is a new upstream version rather than a rebuild of
           # the same one.
           sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
           sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+          if [[ "$PACKAGE" == *-git ]]; then
+            # Keep pkgver() in step with the version above: strip the app-v
+            # tag prefix with the same transform, otherwise the locally built
+            # version never matches .SRCINFO and paru flags the package as
+            # perpetually out of date.
+            python3 - <<'EOF'
+          import re
+          new_fn = (
+            'pkgver() {\n'
+            '  cd "$srcdir/${pkgname%-git}"\n'
+            "  git describe --long --tags | sed 's/^app-v//;s/\\([^-]*-g\\)/r\\1/;s/-/./g'\n"
+            '}\n'
+          )
+          s = open('PKGBUILD').read()
+          s2, n = re.subn(r'pkgver\(\) \{.*?\n\}\n', lambda m: new_fn, s, flags=re.S)
+          assert n == 1, 'pkgver() block not found'
+          open('PKGBUILD', 'w').write(s2)
+          EOF
+          fi
           grep -E '^(pkgver|pkgrel)=' PKGBUILD
 
       - name: Regenerate .SRCINFO
