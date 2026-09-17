@@ -149,43 +149,65 @@ jobs:
         working-directory: src-tauri
         run: cargo build --release --features custom-protocol
 
-      - name: Export PDF and HTML
+      # Separate steps, HTML first, deliberately. They exercise different halves
+      # of the feature — HTML harvests the runtime stylesheet, PDF drives the
+      # platform print pipeline — and running them together meant one failure
+      # hid the other's result entirely. HTML leads because it is the half that
+      # shares no code with the three native print backends.
+      - name: Export HTML
         working-directory: src-tauri
         shell: bash
         run: |
           set -euo pipefail
-
-          BIN=target/release/slideflare
-          if [ "${{ matrix.platform }}" = "windows-latest" ]; then
-            BIN=target/release/slideflare.exe
-          fi
-
           # GTK needs a display; the other two runners already have a window
           # server session.
-          run_export() {
-            if [ "${{ matrix.platform }}" = "ubuntu-22.04" ]; then
-              xvfb-run -a "$BIN" "$@"
-            else
-              "$BIN" "$@"
-            fi
-          }
+          if [ "${{ matrix.platform }}" = "ubuntu-22.04" ]; then
+            xvfb-run -a target/release/slideflare export html ../examples/example.md -o out.html
+          elif [ "${{ matrix.platform }}" = "windows-latest" ]; then
+            target/release/slideflare.exe export html ../examples/example.md -o out.html
+          else
+            target/release/slideflare export html ../examples/example.md -o out.html
+          fi
 
-          run_export export pdf ../examples/example.md -o out.pdf
-          run_export export html ../examples/example.md -o out.html
+      - name: Export PDF
+        working-directory: src-tauri
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.platform }}" = "ubuntu-22.04" ]; then
+            xvfb-run -a target/release/slideflare export pdf ../examples/example.md -o out.pdf
+          elif [ "${{ matrix.platform }}" = "windows-latest" ]; then
+            target/release/slideflare.exe export pdf ../examples/example.md -o out.pdf
+          else
+            target/release/slideflare export pdf ../examples/example.md -o out.pdf
+          fi
 
       # Tier 3, assertion 1, on every platform. A file that exists but is blank
       # is the dangerous failure mode, so size alone is not sufficient — but it
       # is the only check that is trivial on all three runners.
       - name: Check the exports are not trivial
+        # Tier 3, assertion 1. `always()` so a broken PDF on one platform does
+        # not also hide whether its HTML export was fine — each file is only
+        # judged if the step that makes it got as far as writing one.
+        if: always()
         working-directory: src-tauri
         shell: bash
         run: |
-          set -euo pipefail
-          for f in out.pdf out.html; do
+          set -uo pipefail
+          status=0
+          for f in out.html out.pdf; do
+            if [ ! -f "$f" ]; then
+              echo "$f: not produced"
+              continue
+            fi
             size=$(wc -c < "$f")
             echo "$f: $size bytes"
-            [ "$size" -gt 100000 ] || { echo "::error::$f is suspiciously small"; exit 1; }
+            if [ "$size" -le 100000 ]; then
+              echo "::error::$f is suspiciously small"
+              status=1
+            fi
           done
+          exit $status
 
       # Tier 3, assertions 2 and 3. Linux only, because that is the runner with
       # poppler available without fuss. A page count that drifts from the slide
