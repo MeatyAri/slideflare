@@ -206,7 +206,7 @@ measurement are already settled there. An unrealized widget carries no such
 guarantee from either GTK or WebKit.
 
 So a naive `visible: false` window is the risky choice — on GTK an unmapped
-window may never realize. The shape built instead, in `cli::gui::run_export`, is
+window may never realize. The shape built first, in `cli::gui::run_export`, was
 a window that stays realized but is undecorated, kept out of the taskbar, and
 moved to `(-10000, -10000)`. Two caveats found while building it:
 
@@ -218,6 +218,27 @@ moved to `(-10000, -10000)`. Two caveats found while building it:
   may stop being delivered to it entirely. Anything waiting on
   `requestAnimationFrame` therefore needs a timer to fall back on; the first
   working version of this hung indefinitely on exactly that.
+
+**Half of that turned out to be wrong, and GTK no longer works this way.** See
+`docs/headless-export.md` for the measurements; the corrections are:
+
+- Printing does **not** need a realized widget. On WebKitGTK 2.52 a
+  `WebKitWebView` that was never added to a container, never realized and never
+  mapped still prints correct, paginated, selectable PDF.
+- What actually breaks in a hidden window is not the print, it is the
+  **measurement** the deck does before it. `visibilityState` follows the
+  container; in a webview the engine calls hidden, images never settle their
+  layout box, so the deck measures short, `fitScale` stays 1, and every slide
+  prints over-sized and clipped — at exit code 0.
+- `cli::gui::render_offscreen` therefore renders into a `GtkOffscreenWindow`,
+  which the engine treats as a normal visible 1280x720 page (animation frames
+  included) while nothing is ever mapped on the compositor. The toplevel is
+  hidden and emptied. Both caveats above disappear with it: there is no position
+  for Wayland to ignore, and frames keep arriving.
+- This does **not** remove the display-server requirement. `gtk_init` still fails
+  outright with no `DISPLAY`/`WAYLAND_DISPLAY`, so CI keeps `xvfb-run`.
+
+Windows and macOS are unchanged and still use the realized-window shape.
 
 The readiness signal — the one genuine piece of new design work — lives in
 `src/routes/view-slides/+page.svelte` as `waitForDeckReady`, emitting `deck-ready`

@@ -31,6 +31,20 @@
   - [x] also add some github actions to update the AUR versions
 - [x] a convenience option to install/update the slideflare skill after an update to the app or on first launch (maybe inside the tutorial section where we introduce it)
 - [ ] test the examples provided in the readme
+- [ ] windowless export on Windows and macOS (Linux is done; see `docs/headless-export.md`)
+  - [ ] Windows: build the export window with `visible: false`, then force
+        `ICoreWebView2Controller::put_IsVisible(TRUE)` so the renderer keeps
+        running inside a never-shown HWND
+  - [ ] macOS: try `-[NSApplication _setWindowOcclusionDetectionEnabled:]` with
+        `NO` plus the offscreen move; fall back to a zero-alpha window
+  - [ ] make the frontend readiness frame-independent first, since it is the
+        safety net on both: cap `nextFrames()` in `src/lib/export/export.svelte.ts`
+        (it has none today and hangs when frames stop) and settle images/video
+        in `waitForDeckReady` before measuring
+  - [ ] prove it in CI, not locally — neither platform can be tested from here.
+        Add a fidelity gate to `export-smoke`: render `examples/example.md`,
+        `pdftoppm` it, and `compare -metric AE` against committed reference PNGs,
+        so a silently mis-scaled deck cannot pass as a success
 - [x] add to AUR
 - [x] the reload button should reread the file and do the whole parsing pipeline assuming that something went wrong
 - [x] fix screen resizing issue

@@ -3,21 +3,26 @@
 //! Both modes build the *same* app — same plugins, same commands, same
 //! frontend. Export mode differs in exactly two ways, and both are deliberate:
 //!
-//! 1. The window is moved offscreen and stripped of decorations rather than
-//!    being hidden. `docs/testing-platform-exports.md` is explicit that hiding
-//!    it is the risky choice: PDF export prints the *live, realized* webview
-//!    because layout, font resolution, and MathML measurement are settled there,
-//!    and on GTK an unmapped window may never realize at all. Offscreen keeps it
-//!    realized while keeping it out of the user's face.
+//! 1. The deck is rendered out of the user's face, by a route that depends on
+//!    the platform's webview. See `configure_export_window`, and
+//!    `docs/headless-export.md` for the measurements behind the split.
 //!
-//!    Positioning is best-effort, and skipped entirely on macOS. Wayland has no
-//!    notion of global window coordinates, so compositors there ignore the move
-//!    and the window is simply visible for the duration of the render — cosmetic
-//!    rather than harmful, and irrelevant to CI, which runs under `xvfb`, an X
-//!    server, where the move works. macOS is worse than cosmetic: AppKit treats
+//!    On GTK there is **no window at all**: `render_offscreen` moves the webview
+//!    into a `GtkOffscreenWindow` and hides the toplevel, so nothing is ever
+//!    mapped on the compositor. This is verified on Linux only; a display server
+//!    is still required, since `gtk_init` fails without one.
+//!
+//!    Windows still parks a realized, undecorated window far offscreen.
+//!    Positioning there is best-effort. macOS cannot do even that: AppKit treats
 //!    a fully offscreen window as occluded and WebKit then suspends rendering,
-//!    so the print waits forever for pages that never come. See
-//!    `configure_export_window`.
+//!    so the print waits forever for pages that never come — the window stays
+//!    where `tauri.conf.json` centres it, visible for the render.
+//!
+//!    What rules out simply hiding the window is **not** the print. WebKitGTK
+//!    prints correctly from a webview that was never even realized. It is the
+//!    deck measuring itself beforehand: the engine treats a hidden container's
+//!    content as hidden, replaced elements never settle their layout, and every
+//!    slide then prints over-sized and clipped at exit code 0.
 //! 2. `AppState` carries a [`CliExportRequest`], which the frontend picks up and
 //!    acts on once the deck reports itself laid out.
 //!
@@ -29,9 +34,13 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use tauri::{LogicalSize, Manager, RunEvent};
-// Only the offscreen move needs this, and that is skipped on macOS.
-#[cfg(not(target_os = "macos"))]
+use tauri::{Manager, RunEvent};
+// Sizing the window is for platforms that still have one; on GTK the offscreen
+// container is sized instead.
+#[cfg(not(gtk_platform))]
+use tauri::LogicalSize;
+// Only the offscreen move needs this, and that is Windows-only now.
+#[cfg(windows)]
 use tauri::LogicalPosition;
 
 use super::{exit, fail, resolve_deck, resolve_output, ExportArgs};
@@ -41,9 +50,10 @@ use crate::watcher::AppState;
 /// Where the export window is parked.
 ///
 /// Far enough off any plausible desktop to be invisible, while still being a
-/// real mapped window that the compositor and GTK will realize and lay out.
-/// Not used on macOS — see `configure_export_window`.
-#[cfg(not(target_os = "macos"))]
+/// real mapped window that the compositor will realize and lay out. Windows
+/// only: GTK renders into an offscreen window and needs no toplevel, and macOS
+/// cannot move the window at all — see `configure_export_window`.
+#[cfg(windows)]
 const OFFSCREEN: f64 = -10_000.0;
 
 /// Window size for export mode, in CSS pixels.
@@ -56,6 +66,19 @@ const EXPORT_HEIGHT: f64 = 720.0;
 
 /// Set once the export outcome has been reported, so the watchdog stays quiet.
 static EXPORT_SETTLED: AtomicBool = AtomicBool::new(false);
+
+#[cfg(gtk_platform)]
+thread_local! {
+    /// Holds the offscreen window the export webview is rendered into.
+    ///
+    /// It owns the webview once [`render_offscreen`] has reparented it, so
+    /// dropping it would destroy the very thing being printed. A thread-local
+    /// rather than Tauri managed state because GTK objects are neither `Send`
+    /// nor `Sync`, and everything that touches it runs on the main thread —
+    /// the same reasoning as `IN_FLIGHT` in `export/pdf_linux.rs`.
+    static EXPORT_CONTAINER: std::cell::RefCell<Option<gtk::OffscreenWindow>> =
+        const { std::cell::RefCell::new(None) };
+}
 
 /// Build the app with every command registered.
 ///
@@ -133,7 +156,10 @@ fn run_app(state: AppState, export_mode: bool) -> i32 {
     fail("export ended without reporting a result")
 }
 
-/// Put the render window where a batch job belongs: realized, but out of sight.
+/// Put the deck where a batch job belongs: out of sight.
+///
+/// On GTK that means no window at all; elsewhere, a realized window kept off the
+/// user's desktop. See the module comment.
 fn configure_export_window(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // No dock icon or app switcher entry for what is a batch job. Must happen
     // before the window is shown or macOS activates the app.
@@ -144,29 +170,86 @@ fn configure_export_window(app: &mut tauri::App) -> Result<(), Box<dyn std::erro
         .get_webview_window("main")
         .expect("the main window is declared in tauri.conf.json");
 
-    // Realized but out of sight — see the module comment for why this is not
-    // `set_visible(false)`.
-    window.set_decorations(false)?;
-    window.set_size(LogicalSize::new(EXPORT_WIDTH, EXPORT_HEIGHT))?;
+    // On GTK there need be no window at all.
+    #[cfg(gtk_platform)]
+    return render_offscreen(&window);
 
-    // Everywhere but macOS, park it far off any plausible desktop.
-    //
-    // macOS is excluded deliberately. AppKit reports a fully offscreen window as
-    // occluded, and WebKit suspends rendering in the web content process for an
-    // occluded WKWebView. The print pipeline then waits forever for pages that
-    // are never drawn, which is exactly how this presented: readiness reached,
-    // then `runOperation` hanging until the watchdog fired. It is the same trap
-    // as the animation frames an unpainted window never delivers — see
-    // `nextFrames` in `src/routes/view-slides/+page.svelte`.
-    //
-    // So on macOS the window stays where `tauri.conf.json` centres it, visible
-    // for the few seconds a render takes. The activation policy above already
-    // keeps it out of the Dock and the app switcher.
-    #[cfg(not(target_os = "macos"))]
+    // Everywhere else, keep one realized but out of sight.
+    #[cfg(not(gtk_platform))]
     {
-        window.set_position(LogicalPosition::new(OFFSCREEN, OFFSCREEN))?;
-        window.set_skip_taskbar(true)?;
+        window.set_decorations(false)?;
+        window.set_size(LogicalSize::new(EXPORT_WIDTH, EXPORT_HEIGHT))?;
+
+        // On Windows, park it far off any plausible desktop.
+        //
+        // macOS is excluded deliberately. AppKit reports a fully offscreen
+        // window as occluded, and WebKit suspends rendering in the web content
+        // process for an occluded WKWebView. The print pipeline then waits
+        // forever for pages that are never drawn, which is exactly how this
+        // presented: readiness reached, then the print hanging until the
+        // watchdog fired. It is the same trap as the animation frames an
+        // unpainted window never delivers — see `nextFrames` in
+        // `src/routes/view-slides/+page.svelte`.
+        //
+        // So on macOS the window stays where `tauri.conf.json` centres it,
+        // visible for the few seconds a render takes. The activation policy
+        // above already keeps it out of the Dock and the app switcher.
+        #[cfg(windows)]
+        {
+            window.set_position(LogicalPosition::new(OFFSCREEN, OFFSCREEN))?;
+            window.set_skip_taskbar(true)?;
+        }
+
+        Ok(())
     }
+}
+
+/// Move the export webview out of its toplevel and into an offscreen window.
+///
+/// WebKitGTK does not need a window to print, and does not even need a realized
+/// widget: an unparented `WebKitWebView` prints correct, paginated, selectable
+/// PDF. What it does need is a container the *engine* considers visible, which
+/// is a different thing. `visibilityState` follows the container, and a webview
+/// the engine calls hidden never settles the layout of its replaced elements —
+/// images in particular. The deck measures its own slides to derive one
+/// `fitScale` for the whole document, so it would measure short and then print
+/// every slide over-sized and clipped, at exit code 0. That was observed, not
+/// theorised; `docs/headless-export.md` has the evidence.
+///
+/// A `GtkOffscreenWindow` satisfies both halves: the web content sees a normal,
+/// visible 1280x720 page and keeps receiving animation frames, while nothing is
+/// ever mapped on the compositor. That makes it strictly better than the
+/// toplevel it replaces, which had to be parked at (-10000, -10000) — a move
+/// Wayland compositors ignore, leaving the window plainly visible for the whole
+/// render.
+#[cfg(gtk_platform)]
+fn render_offscreen(window: &tauri::WebviewWindow) -> Result<(), Box<dyn std::error::Error>> {
+    use gtk::prelude::*;
+
+    // The toplevel tao insists on creating stays, unmapped and now empty:
+    // Tauri's window bookkeeping and the `RunEvent::Exit` guard in `run_app`
+    // both key off it still existing.
+    window.hide()?;
+
+    window.with_webview(|platform| {
+        let view = platform.inner();
+
+        if let Some(parent) = view.parent() {
+            if let Some(container) = parent.downcast_ref::<gtk::Container>() {
+                container.remove(&view);
+            }
+        }
+
+        let offscreen = gtk::OffscreenWindow::new();
+        offscreen.set_default_size(EXPORT_WIDTH as i32, EXPORT_HEIGHT as i32);
+        offscreen.add(&view);
+        // Realizes and allocates it, which is what gives the page its viewport.
+        // Without it `innerWidth`/`innerHeight` are 0 and the deck lays out
+        // against nothing.
+        offscreen.show_all();
+
+        EXPORT_CONTAINER.with(|slot| *slot.borrow_mut() = Some(offscreen));
+    })?;
 
     Ok(())
 }

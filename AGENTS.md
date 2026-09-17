@@ -110,12 +110,16 @@ Three things that will bite:
   failure, `2` usage, `3` parse error, `4` timeout. Tauri exits `0` when the last
   window closes, so `run_export` intercepts `RunEvent::Exit` and fails unless the
   export actually reported back.
-- **The export window is offscreen but realized**, never hidden — an unmapped GTK
-  window may never realize, and the PDF is printed from the live webview. It may
-  therefore never be painted, so nothing may wait on `requestAnimationFrame`
-  without a timer to fall back on. On macOS it is not moved offscreen at all:
-  AppKit calls a fully offscreen window occluded and WebKit then stops rendering,
-  which hangs the print.
+- **On GTK the export has no window at all.** `cli::gui::render_offscreen` moves
+  the webview into a `GtkOffscreenWindow` and hides the toplevel. Printing never
+  needed a window; what does need one is the deck measuring itself, because a
+  container the engine calls hidden never settles image layout and every slide
+  then prints over-sized at exit code 0. An offscreen window is visible as far as
+  the engine is concerned, so both hold. A display server is still required —
+  `gtk_init` fails without one. **This is Linux/BSD only and verified there
+  only** — Windows still parks a realized window offscreen, macOS cannot even do
+  that (AppKit calls a fully offscreen window occluded and WebKit then stops
+  rendering), and neither has been tested windowless. See `docs/headless-export.md`.
 - **`tauri::generate_context!` may be expanded only once in the crate.** Every
   expansion emits an `_EMBED_INFO_PLIST` symbol, and a second one fails the macOS
   link — invisible on Linux and Windows, so CI is what tells you. `run_app` holds
