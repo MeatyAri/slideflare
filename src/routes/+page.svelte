@@ -17,9 +17,23 @@
   const updates = createUpdates();
 
   onMount(() => {
-    // Gating is by feature id, so no app version is needed here; the overlay
-    // derives its "what's new" label from the newest feature it shows.
-    tutorial.init();
+    // A deck named on the command line goes straight to the presentation,
+    // skipping the drop screen and the tutorial along with it. Launching with
+    // no arguments is unchanged.
+    invoke<string | null>('initial_file_path')
+      .then((filePath) => {
+        if (filePath) {
+          handleFile(filePath);
+          return;
+        }
+        // Gating is by feature id, so no app version is needed here; the overlay
+        // derives its "what's new" label from the newest feature it shows.
+        tutorial.init();
+      })
+      .catch((error) => {
+        console.error('Failed to read the initial file path:', error);
+        tutorial.init();
+      });
   });
 
   async function handleFile(filePath: string) {

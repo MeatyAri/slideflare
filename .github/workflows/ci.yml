@@ -92,3 +92,128 @@ jobs:
       - name: Test
         working-directory: src-tauri
         run: cargo test
+
+  # Tier 2 of docs/testing-platform-exports.md: prove the exports actually
+  # render, not merely that they compile.
+  #
+  # The webview IS the renderer — `print_to_pdf` reaches through `with_webview`
+  # to the real WKWebView / ICoreWebView2 / webkit2gtk::WebView, and the HTML
+  # export harvests a stylesheet Tailwind only generates at runtime — so this
+  # needs a real display on every platform. `slideflare export` is the vehicle
+  # rather than a bespoke harness precisely so CI exercises the code users run.
+  export-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ubuntu-22.04, windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # xvfb on top of the build dependencies: GTK aborts in `gtk_init` without
+      # a display, so there is nothing to print to without it. poppler-utils
+      # provides pdfinfo for the structural assertions below.
+      - name: Install system dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xvfb poppler-utils
+
+      # Unlike the `rust` job above, this one genuinely needs the frontend: the
+      # binary loads it from `frontendDist` and renders it for real.
+      - name: Build frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      # `--features custom-protocol` is load-bearing and easy to miss. Tauri
+      # picks `devUrl` over the bundled frontend from that feature alone (see
+      # `dev: cfg!(not(feature = "custom-protocol"))` in tauri-macros) — NOT
+      # from debug_assertions — so without it even a release build points at
+      # localhost and every export fails with "Connection refused".
+      - name: Build slideflare
+        working-directory: src-tauri
+        run: cargo build --release --features custom-protocol
+
+      - name: Export PDF and HTML
+        working-directory: src-tauri
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BIN=target/release/slideflare
+          if [ "${{ matrix.platform }}" = "windows-latest" ]; then
+            BIN=target/release/slideflare.exe
+          fi
+
+          # GTK needs a display; the other two runners already have a window
+          # server session.
+          run_export() {
+            if [ "${{ matrix.platform }}" = "ubuntu-22.04" ]; then
+              xvfb-run -a "$BIN" "$@"
+            else
+              "$BIN" "$@"
+            fi
+          }
+
+          run_export export pdf ../examples/example.md -o out.pdf
+          run_export export html ../examples/example.md -o out.html
+
+      # Tier 3, assertion 1, on every platform. A file that exists but is blank
+      # is the dangerous failure mode, so size alone is not sufficient — but it
+      # is the only check that is trivial on all three runners.
+      - name: Check the exports are not trivial
+        working-directory: src-tauri
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in out.pdf out.html; do
+            size=$(wc -c < "$f")
+            echo "$f: $size bytes"
+            [ "$size" -gt 100000 ] || { echo "::error::$f is suspiciously small"; exit 1; }
+          done
+
+      # Tier 3, assertions 2 and 3. Linux only, because that is the runner with
+      # poppler available without fuss. A page count that drifts from the slide
+      # count, or a MediaBox that is not exactly the design resolution, both mean
+      # the print pipeline has stopped matching the deck.
+      - name: Check the PDF structure
+        if: matrix.platform == 'ubuntu-22.04'
+        working-directory: src-tauri
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          slides=$(target/release/slideflare validate ../examples/example.md | grep -oE '[0-9]+')
+          pages=$(pdfinfo out.pdf | awk '/^Pages:/ { print $2 }')
+          echo "slides=$slides pages=$pages"
+          [ "$slides" = "$pages" ] \
+            || { echo "::error::page count $pages does not match slide count $slides"; exit 1; }
+
+          pdfinfo out.pdf | grep -qE '^Page size: +960 x 540 pts' \
+            || { echo "::error::unexpected page size"; pdfinfo out.pdf | grep '^Page size'; exit 1; }
+
+      # Kept so a failure can be inspected rather than only read about.
+      - name: Upload the exports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exports-${{ matrix.platform }}
+          path: |
+            src-tauri/out.pdf
+            src-tauri/out.html
+          if-no-files-found: warn

@@ -43,6 +43,7 @@ Describe your deck → slideflare-slides generates the Markdown → open in Slid
 - **Tailwind CSS** — Full Tailwind utility class support for backgrounds, colors, and layouts.
 - **Rust-powered** — Lightning-fast parsing, caching, and hot-reloading via Tauri 2.0.
 - **Drag & drop** — Drop `.md` files onto the app to launch presentations instantly.
+- **Command line** — Open a deck, or render one to PDF/HTML, straight from your shell.
 - **Cross-platform** — Windows, macOS, Linux.
 
 ## 🚀 Quick Start
@@ -70,6 +71,29 @@ That's it.
 ```
 
 Open SlideFlare and **drag and drop** your `.md` file — or double-click a slide file to launch it directly.
+
+## ⌨️ Command line
+
+```bash
+slideflare deck.md                          # open a deck
+slideflare export pdf  deck.md -o out.pdf   # render to PDF
+slideflare export html deck.md -o out.html  # render to a single self-contained HTML file
+slideflare validate deck.md                 # check it parses (no window)
+slideflare parse deck.md --json             # dump the parsed slides
+slideflare skill install                    # install/update the slideflare-slides skill
+slideflare completions fish                 # shell completions (bash/zsh/fish/powershell/elvish)
+```
+
+`validate` and `parse` are headless — no window, no webview — so they are quick enough
+for an editor's on-save hook or a pre-commit check.
+
+The exports are not: rendering a deck means running it. PDF export drives the platform's
+own print pipeline against the live webview, and the HTML export captures the stylesheet
+Tailwind generates at runtime, so both open a window (parked offscreen) for the duration.
+On a headless Linux box, wrap it: `xvfb-run -a slideflare export pdf deck.md -o out.pdf`.
+
+Exit codes, for scripting: `0` success, `1` failure, `2` bad arguments, `3` the deck did
+not parse, `4` the export timed out.
 
 ## 🎯 Examples
 

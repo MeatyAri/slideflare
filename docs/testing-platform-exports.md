@@ -1,6 +1,7 @@
 # Testing the platform-dependent export code
 
-Status as of 2026-09-16. Tier 1 is implemented; tiers 2–4 are planned.
+Status as of 2026-09-16. Tiers 1 and 2 are implemented, along with the cheap
+half of tier 3; the rest of tier 3 and tier 4 are planned.
 
 ## The problem
 
@@ -64,16 +65,28 @@ macOS could still escape. Judged acceptable: the platform-conditional code is
 gated on `target_os`, never on architecture, and adding a second Apple target
 would recompile every dependency for marginal coverage.
 
-## Tier 2 — runtime smoke test, via the planned CLI (deferred)
+## Tier 2 — runtime smoke test, via the CLI (implemented)
 
 Compile coverage proves the code builds, not that it prints. For that, a real
 webview has to run on each OS.
 
-### Why this waits for the CLI
+`.github/workflows/ci.yml` gained an `export-smoke` job, matrixed over the same
+three runners, which builds the frontend and the binary and then runs:
 
-A CLI is planned for the project. It is a strictly better vehicle for this test
-than a dedicated test harness, so Tier 2 is deliberately deferred until it
-lands, rather than building a harness that would immediately rot.
+```
+slideflare export pdf  examples/example.md -o out.pdf
+slideflare export html examples/example.md -o out.html
+```
+
+under `xvfb-run` on Linux and directly elsewhere, asserting the exit code and the
+output. Both exports are also kept as build artifacts, so a failure can be looked
+at rather than only read about.
+
+### Why the CLI was the right vehicle
+
+A CLI was planned for the project, and it is a strictly better vehicle for this
+test than a dedicated test harness, so Tier 2 was deliberately deferred until it
+landed rather than building a harness that would immediately rot.
 
 What the CLI **cannot** remove: the webview _is_ the PDF renderer.
 `print_to_pdf` takes a `&WebviewWindow` and calls `with_webview` to reach the
@@ -101,14 +114,15 @@ Unchanged by the CLI:
   outright without one. Requires `xvfb-run`.
 - **Windows** — WebView2 needs an `HWND` to create a controller. A hidden window
   is fine. Needs the WebView2 runtime present on the runner (believed
-  preinstalled on the Windows Server images — confirm before relying on it).
+  preinstalled on the Windows Server images). The `export-smoke` job settles this
+  either way on its first run: if the runtime is missing, that is where it shows.
 - **macOS** — `NSPrintOperation` needs AppKit with a window server session. Set
   the activation policy to accessory/prohibited to avoid a dock icon. GitHub's
   macOS runners do provide a session, but headless `runOperation()` is the
   least-trusted piece of the whole feature and may need
   `runOperationModalForWindow:` instead.
 
-### The design catch worth planning around
+### The design catch, and how it turned out
 
 As documented in `src-tauri/src/export.rs`, PDF export deliberately prints the
 **live, realized** webview, because layout, font resolution, and MathML
@@ -116,11 +130,69 @@ measurement are already settled there. An unrealized widget carries no such
 guarantee from either GTK or WebKit.
 
 So a naive `visible: false` window is the risky choice — on GTK an unmapped
-window may never realize. The safer shape is a window that is realized but
-positioned offscreen, or simply visible on the virtual display. Either way the
-CLI needs the same "deck has finished laying out" signal the GUI path gets, not
-merely "file parsed". That readiness signal is the one genuine piece of new
-design work CLI export mode adds.
+window may never realize. The shape built instead, in `cli::gui::run_export`, is
+a window that stays realized but is undecorated, kept out of the taskbar, and
+moved to `(-10000, -10000)`. Two caveats found while building it:
+
+- Positioning is **best-effort**. Wayland has no global window coordinates, so
+  compositors there ignore the move and the window is simply visible while the
+  render runs. Cosmetic, and irrelevant to CI, which runs under `xvfb` — an X
+  server, where the move works.
+- An offscreen window **is not guaranteed to be painted**, and animation frames
+  may stop being delivered to it entirely. Anything waiting on
+  `requestAnimationFrame` therefore needs a timer to fall back on; the first
+  working version of this hung indefinitely on exactly that.
+
+The readiness signal — the one genuine piece of new design work — lives in
+`src/routes/view-slides/+page.svelte` as `waitForDeckReady`, emitting `deck-ready`
+or `deck-failed`. It waits for four things in order:
+
+1. a parse delivered by **this** process (`shared.generation > 0`), not merely a
+   non-empty deck,
+2. every slide having reported its height, so each has been laid out and measured
+   and `fitScale` is derived from a complete set,
+3. `document.fonts.ready`, since text measured against a fallback face reflows
+   when the real one loads, and
+4. two animation frames, so the scale from (2) has been applied and not just
+   computed.
+
+Condition (1) needed a change beyond the CLI: `shared.slides` used to be seeded
+from `localStorage`, which made "there are slides" meaningless at startup — those
+slides belonged to whichever deck was open last, so a readiness check could pass
+on the **wrong document** and export it. The cache is gone; Rust re-parses and
+re-sends on every launch regardless, so nothing was lost.
+
+It is polled rather than watched reactively. `waitForDeckReady` is awaited from an
+async `onMount`, and effects created in a detached `$effect.root` from there are
+not reliably re-run — which presented as an export patiently waiting out its whole
+timeout while the finished deck sat rendered behind it.
+
+### The other trap: `custom-protocol`
+
+Tauri chooses between `devUrl` and the bundled frontend from the
+`custom-protocol` feature **alone** — `dev: cfg!(not(feature = "custom-protocol"))`
+in `tauri-macros` — and not from `debug_assertions`. A plain `cargo build
+--release` therefore produces a binary that loads `http://localhost:1420`, and
+every export fails with `Connection refused` inside an empty window.
+
+`src-tauri/Cargo.toml` now declares the standard passthrough feature, CI builds
+with `--features custom-protocol`, and `run_export` prints a warning naming the
+missing feature when it is absent, so the next person meets a sentence rather
+than a blank window.
+
+### Exit codes are part of the contract
+
+`cli::exit` fixes them: `0` success, `1` failure, `2` usage, `3` the deck did not
+parse, `4` the export timed out. Two failure modes are worth calling out because
+both would otherwise be silent successes:
+
+- Tauri exits the process with `0` when the last window closes. A window closed
+  by hand, or a webview that dies on startup, would look exactly like a
+  successful export. `run_export` intercepts `RunEvent::Exit` and fails unless
+  the export has genuinely reported back.
+- An export that never reports at all is caught by a watchdog thread, rather than
+  leaving an invisible window running until the CI job's own timeout kills it
+  with nothing to diagnose.
 
 ### HTML export has the same shape
 
@@ -133,7 +205,7 @@ reimplementation that would immediately drift. Evaluate it in the webview.
 Good news: same window, same readiness signal. One mechanism serves both
 exports.
 
-## Tier 3 — what to assert
+## Tier 3 — what to assert (partly implemented)
 
 This matters more than the harness does. The dangerous failure mode is not a
 crash; it is a PDF that is produced but blank. That is silent, and a page-count
@@ -154,6 +226,16 @@ colour check on Linux only.
 
 Avoid pixel-golden diffs. Font rasterization differs per platform and they will
 flap.
+
+**Built so far:** item 1 on all three runners (both exports), and items 2 and 3
+on Linux via `pdfinfo`, with the expected slide count taken from `slideflare
+validate` rather than hardcoded so the fixture can grow.
+
+**Item 4 is still open.** It was verified by hand once on Linux — page 1 of
+`examples/example.md` rasterizes to a dominant `rgb(25, 60, 184)` against the
+`bg-blue-800` (`#1e40af`) the frontmatter asks for, close enough to confirm
+`print-color-adjust` is doing its job — but that check is not yet in CI, and it
+is the one that would actually catch a blank page.
 
 ## Tier 4 — coverage automation cannot reach
 

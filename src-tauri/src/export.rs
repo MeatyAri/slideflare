@@ -21,6 +21,7 @@
 use std::fs;
 use std::path::PathBuf;
 
+use serde::Serialize;
 use tauri::Emitter;
 
 use crate::watcher::AppState;
@@ -125,4 +126,42 @@ pub(crate) fn emit_result(window: &tauri::WebviewWindow, result: Result<String, 
         Ok(path) => window.emit(EVENT_PDF_DONE, path),
         Err(message) => window.emit(EVENT_PDF_FAILED, message),
     };
+}
+
+/// An export requested on the command line.
+///
+/// Serialized to the frontend, which selects an exporter from `kind` and passes
+/// `out_path` straight through to the very functions the GUI buttons call — so
+/// CI exercises the shipping code path rather than a parallel one.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliExportRequest {
+    /// `"pdf"` or `"html"`.
+    pub kind: String,
+    /// Absolute path to write.
+    pub out_path: String,
+}
+
+/// What the CLI asked to be exported, if this process is in export mode.
+///
+/// The frontend asks once on mount. `None` — the GUI case — means carry on
+/// normally, so the presentation behaves identically whether or not the binary
+/// was ever invoked with arguments.
+#[tauri::command]
+pub async fn cli_export_request(
+    app_state: tauri::State<'_, AppState>,
+) -> Result<Option<CliExportRequest>, String> {
+    Ok(app_state.cli_export())
+}
+
+/// Report the outcome of a CLI export and end the process.
+///
+/// Only reached in export mode, and only once the frontend knows the export
+/// truly finished — for PDF that means after `EVENT_PDF_DONE`, which fires after
+/// the platform print pipeline has written the file. There is therefore nothing
+/// left to tear down, and exiting here is what turns the result into the exit
+/// code `docs/testing-platform-exports.md` wants to assert on.
+#[tauri::command]
+pub async fn cli_export_finish(ok: bool, message: Option<String>) -> Result<(), String> {
+    crate::cli::gui::finish_export(ok, message.as_deref())
 }

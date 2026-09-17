@@ -21,6 +21,9 @@ bun run check:watch            # Type checking with watch mode
 bun run test                   # Run Rust unit tests (cargo test)
 bun run test:watch             # Run tests with watch mode
 
+# CLI (see "Command line interface" below)
+cargo build --release --features custom-protocol   # the ONLY way to get a working export binary
+
 # Benchmarks — cd into `src-tauri/` first, then run `cargo bench <filter>`
 cargo bench                  # Run all benchmarks
 cargo bench split            # Benchmark slide splitting only
@@ -79,6 +82,44 @@ cargo bench parse            # Benchmark full parsing only
 - File watching with notify crate for hot reload
 - Event-driven communication between Rust backend and Svelte frontend
 - Static site generation via @sveltejs/adapter-static for Tauri compatibility
+
+## Command line interface
+
+Lives in `src-tauri/src/cli/`. Arguments are parsed with clap in `main.rs`
+**before** `tauri::Builder` exists, which is what lets `validate`/`parse`/`skill`
+run with no webview at all and lets `export` configure its own window.
+
+- `cli/mod.rs` — argument definitions, exit codes, path resolution, dispatch.
+- `cli/headless.rs` — `validate`, `parse`, `skill install`, `completions`. Never
+  constructs a `tauri::Builder`.
+- `cli/gui.rs` — boots the app for both presentation and export mode.
+
+Adding a command: add a variant to `Command`, handle it in `dispatch`, and — if
+it needs a window — register any new `#[tauri::command]` in `cli::gui::builder`
+using its **full path** (`crate::export::foo`). A bare name will not resolve
+there; the hidden `__cmd__*` macro is re-exported from the defining module.
+
+Three things that will bite:
+
+- **`--features custom-protocol` is mandatory for export.** Tauri picks `devUrl`
+  over the bundled frontend from that feature alone (`dev: cfg!(not(feature =
+"custom-protocol"))` in `tauri-macros`), _not_ from `debug_assertions`. Without
+  it, even a `--release` build loads `localhost:1420` and every export fails with
+  "Connection refused" in an empty window.
+- **Exit codes are a contract** (`cli::exit`), asserted by CI: `0` ok, `1`
+  failure, `2` usage, `3` parse error, `4` timeout. Tauri exits `0` when the last
+  window closes, so `run_export` intercepts `RunEvent::Exit` and fails unless the
+  export actually reported back.
+- **The export window is offscreen but realized**, never hidden — an unmapped GTK
+  window may never realize, and the PDF is printed from the live webview. It may
+  therefore never be painted, so nothing may wait on `requestAnimationFrame`
+  without a timer to fall back on.
+
+Export mode hands the work to the frontend rather than reimplementing it: the
+deck signals `deck-ready` from `waitForDeckReady` in
+`src/routes/view-slides/+page.svelte`, and the CLI then calls the same
+`exportPdf`/`exportHtml` the NavBar buttons call, with a path instead of a save
+dialog. See `docs/testing-platform-exports.md` for why.
 
 ## Versioning
 

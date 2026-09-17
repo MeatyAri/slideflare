@@ -10,6 +10,12 @@
  * and given a moment to lay out. Rust then reports the outcome as an event,
  * because on two of the three platforms printing is asynchronous and the command
  * returns as soon as the job has *started*.
+ *
+ * Both exports take an optional target path. Supplying one skips the save
+ * dialog, which is what lets the CLI drive these exact functions rather than a
+ * parallel implementation that would drift — see `docs/testing-platform-exports.md`.
+ * Both also resolve only once the export has genuinely finished, so a caller can
+ * await the real outcome instead of merely the print having started.
  */
 
 import { invoke } from '@tauri-apps/api/core';
@@ -65,14 +71,17 @@ export function createExport() {
     return true;
   }
 
-  async function exportHtml(): Promise<void> {
+  async function exportHtml(targetPath?: string): Promise<void> {
     if (!canStart()) return;
 
     const name = await deckName();
-    const path = await save({
-      defaultPath: `${name}.html`,
-      filters: [{ name: 'HTML', extensions: ['html'] }]
-    });
+    const path =
+      targetPath ??
+      (await save({
+        defaultPath: `${name}.html`,
+        filters: [{ name: 'HTML', extensions: ['html'] }]
+      }));
+    // Only reachable interactively; the CLI always supplies a path.
     if (!path) return;
 
     busy = true;
@@ -85,20 +94,24 @@ export function createExport() {
       notify('Exported to HTML', 'blue');
     } catch (error) {
       notify(`HTML export failed: ${error}`, 'red');
+      throw error;
     } finally {
       busy = false;
       busyLabel = '';
     }
   }
 
-  async function exportPdf(): Promise<void> {
+  async function exportPdf(targetPath?: string): Promise<void> {
     if (!canStart()) return;
 
     const name = await deckName();
-    const path = await save({
-      defaultPath: `${name}.pdf`,
-      filters: [{ name: 'PDF', extensions: ['pdf'] }]
-    });
+    const path =
+      targetPath ??
+      (await save({
+        defaultPath: `${name}.pdf`,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }]
+      }));
+    // Only reachable interactively; the CLI always supplies a path.
     if (!path) return;
 
     busy = true;
@@ -108,35 +121,44 @@ export function createExport() {
     let settled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    const finish = (message: string, color: 'blue' | 'red') => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      listeners.forEach((stop) => stop());
-      shared.printMode = false;
-      busy = false;
-      busyLabel = '';
-      notify(message, color);
-    };
+    // The returned promise settles where `finish` does, so awaiting this
+    // function means awaiting the print itself rather than its kick-off.
+    return new Promise<void>((resolve, reject) => {
+      const finish = (message: string, color: 'blue' | 'red') => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        listeners.forEach((stop) => stop());
+        shared.printMode = false;
+        busy = false;
+        busyLabel = '';
+        notify(message, color);
 
-    try {
-      listeners.push(await listen(EVENT_PDF_DONE, () => finish('Exported to PDF', 'blue')));
-      listeners.push(
-        await listen<string>(EVENT_PDF_FAILED, (event) =>
-          finish(`PDF export failed: ${event.payload}`, 'red')
-        )
-      );
-      timer = setTimeout(() => finish('PDF export timed out', 'red'), PDF_TIMEOUT_MS);
+        if (color === 'red') reject(new Error(message));
+        else resolve();
+      };
 
-      // Lay the deck out for paper, then let the browser actually do it before
-      // handing the webview to the print pipeline.
-      shared.printMode = true;
-      await nextFrames();
+      (async () => {
+        try {
+          listeners.push(await listen(EVENT_PDF_DONE, () => finish('Exported to PDF', 'blue')));
+          listeners.push(
+            await listen<string>(EVENT_PDF_FAILED, (event) =>
+              finish(`PDF export failed: ${event.payload}`, 'red')
+            )
+          );
+          timer = setTimeout(() => finish('PDF export timed out', 'red'), PDF_TIMEOUT_MS);
 
-      await invoke('export_pdf', { path });
-    } catch (error) {
-      finish(`PDF export failed: ${error}`, 'red');
-    }
+          // Lay the deck out for paper, then let the browser actually do it before
+          // handing the webview to the print pipeline.
+          shared.printMode = true;
+          await nextFrames();
+
+          await invoke('export_pdf', { path });
+        } catch (error) {
+          finish(`PDF export failed: ${error}`, 'red');
+        }
+      })();
+    });
   }
 
   return {

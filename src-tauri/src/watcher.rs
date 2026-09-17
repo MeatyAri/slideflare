@@ -7,6 +7,7 @@ use twox_hash::XxHash64;
 use negahban::{EventType, HookType, Negahban};
 use tauri::{Emitter, Listener};
 
+use crate::export::CliExportRequest;
 use crate::incremental::{
     compute_slide_hashes, create_slide_change_events, detect_slide_changes, SlideChangeEvent,
     VecSlideHashes,
@@ -16,25 +17,60 @@ use crate::parser::parse_markdown_with_frontmatter;
 /// State shared between the file watcher and the reparse command.
 /// Allows `reparse_document` to access the watcher's incremental state
 /// and file path so it can trigger a full reparse.
+///
+/// It also carries what the command line asked for. Both fields are set once
+/// before the app starts and never change, so they need no locking: the deck to
+/// open on launch, and — in CLI export mode — the export to perform once the
+/// deck has finished laying out.
 pub struct AppState {
     file_path: Mutex<Option<String>>,
     incremental_state: Mutex<Option<Arc<Mutex<IncrementalState>>>>,
+    initial_deck: Option<String>,
+    cli_export: Option<CliExportRequest>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
-        Self {
-            file_path: Mutex::new(None),
-            incremental_state: Mutex::new(None),
-        }
+        Self::new(None, None)
     }
 }
 
 impl AppState {
+    /// Build the state for a launch, with whatever the CLI supplied.
+    pub fn new(initial_deck: Option<String>, cli_export: Option<CliExportRequest>) -> Self {
+        Self {
+            file_path: Mutex::new(None),
+            incremental_state: Mutex::new(None),
+            initial_deck,
+            cli_export,
+        }
+    }
+
     /// Path of the Markdown file currently being watched, if any.
     pub fn file_path(&self) -> Option<String> {
         self.file_path.lock().unwrap().clone()
     }
+
+    /// Deck named on the command line, if any.
+    pub fn initial_deck(&self) -> Option<String> {
+        self.initial_deck.clone()
+    }
+
+    /// Export requested on the command line, if this process is in export mode.
+    pub fn cli_export(&self) -> Option<CliExportRequest> {
+        self.cli_export.clone()
+    }
+}
+
+/// Deck the frontend should open without being asked.
+///
+/// Returned as `None` for a plain `slideflare` launch, which leaves the
+/// drag-and-drop screen exactly as it was.
+#[tauri::command]
+pub async fn initial_file_path(
+    app_state: tauri::State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    Ok(app_state.initial_deck())
 }
 
 /// State for incremental slide processing

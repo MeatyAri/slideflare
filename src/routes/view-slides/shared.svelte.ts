@@ -42,6 +42,16 @@ interface SharedState {
    * platform print pipeline, and clears it once the export reports back.
    */
   printMode: boolean;
+  /**
+   * Counts parses delivered by *this* process — incremented on every
+   * `markdown-updated` and `slide-changed` event.
+   *
+   * `slides` starting empty already means a non-empty deck can only have come
+   * from this process, so this is a second, cheaper way to say the same thing.
+   * It stays because it also distinguishes "parsed, and legitimately empty"
+   * from "nothing has arrived yet".
+   */
+  generation: number;
 }
 
 export type { ParseError, Slide };
@@ -71,9 +81,17 @@ export function dismissNotification(id: number): void {
 
 export const shared: SharedState = $state({
   index: 0,
-  slides: JSON.parse(localStorage.getItem('slides') || '[]') as Slide[],
+  // Deliberately empty, never seeded from localStorage. Restoring the previous
+  // deck here bought a slightly smoother reload at the cost of making "there are
+  // slides" meaningless: at startup those slides belong to whatever file was
+  // open last. Anything waiting for a deck to be ready — CLI export above all,
+  // which would otherwise render the wrong document — could not tell the
+  // difference. Rust re-parses and re-sends on every launch anyway, so nothing
+  // is lost by starting blank.
+  slides: [],
   error: null,
-  printMode: false
+  printMode: false,
+  generation: 0
 });
 
 export function applySlideChange(event: SlideChangeEvent): void {
@@ -88,7 +106,4 @@ export function applySlideChange(event: SlideChangeEvent): void {
       shared.slides = [...shared.slides.slice(0, index), slide, ...shared.slides.slice(index)];
     }
   });
-
-  // Save to localStorage
-  localStorage.setItem('slides', JSON.stringify(shared.slides));
 }

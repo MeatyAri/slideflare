@@ -14,6 +14,14 @@ edition = "2021"
 name = "slideflare_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# Selects the bundled frontend over `devUrl`. Tauri decides between the two from
+# this feature alone — NOT from `debug_assertions` — via `dev:
+# cfg!(not(feature = "custom-protocol"))` in `tauri-macros`. The Tauri CLI turns
+# it on for `tauri build`; a bare `cargo build` does not, which is why
+# `slideflare export` needs it explicitly (see `.github/workflows/ci.yml`).
+custom-protocol = ["tauri/custom-protocol"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -39,6 +47,8 @@ flate2 = "1"
 tar = "0.4"
 dirs = "6"
 which = "7"
+clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
 
 # Platform webview handles, used only by the native PDF export in `export::pdf_*`.
 # Versions are pinned to whatever wry/tauri already resolve to so cargo unifies
@@ -50,7 +60,13 @@ glib = "0.18"
 
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.38"
-windows = { version = "0.61", features = ["Win32_Foundation"] }
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  # AttachConsole, so the CLI can print into the terminal that launched it.
+  # Release builds set `windows_subsystem = "windows"`, which otherwise leaves
+  # the process with no stdout/stderr at all.
+  "Win32_System_Console",
+] }
 windows-core = "0.61"
 
 # objc2-app-kit's printing types and objc2-foundation's NSURL live behind

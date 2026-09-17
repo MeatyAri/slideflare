@@ -30,10 +30,10 @@ use base64::engine::general_purpose::STANDARD;
 // Define the output JSON structure
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Slide {
-    bg_color: String,
-    text_color: String,
-    title: String,
-    content: String,
+    pub bg_color: String,
+    pub text_color: String,
+    pub title: String,
+    pub content: String,
 }
 
 #[derive(Deserialize, Debug)]

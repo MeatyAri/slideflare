@@ -3,13 +3,37 @@
   import Slide from './Slide.svelte';
   import ErrorScreen from './ErrorScreen.svelte';
   import { webview } from '@tauri-apps/api';
-  import { listen } from '@tauri-apps/api/event';
+  import { invoke } from '@tauri-apps/api/core';
+  import { emit, listen } from '@tauri-apps/api/event';
   import { shared, type ParseError, DESIGN_W, DESIGN_H, VIEWPORT_PADDING } from './shared.svelte';
   import { onDestroy, onMount } from 'svelte';
   import { createExport } from '$lib/export/export.svelte';
   import ExportOverlay from '$lib/export/ExportOverlay.svelte';
 
   const exporter = createExport();
+
+  /** An export asked for on the command line. */
+  interface CliExportRequest {
+    kind: 'pdf' | 'html';
+    outPath: string;
+  }
+
+  /**
+   * How long to wait for the deck to lay itself out.
+   *
+   * The CLI gets the longer budget because it runs on cold CI machines under
+   * xvfb; its own watchdog in `cli::gui` is longer still, so this one reports
+   * the more useful "deck never became ready" rather than a bare timeout.
+   */
+  const CLI_READY_TIMEOUT_MS = 60_000;
+  const GUI_READY_TIMEOUT_MS = 30_000;
+
+  /**
+   * The exporters reject on genuine failure, but they have already told the user
+   * with a notification. Interactive callers therefore only need to stop the
+   * rejection becoming an unhandled one.
+   */
+  const ignoreExportRejection = () => {};
 
   // Track real window size. Scaling is WIDTH-driven: the fixed design width
   // (DESIGN_W) is scaled to fill the window width (minus a tiny padding), so
@@ -63,7 +87,7 @@
     const handleExportShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'e') {
         event.preventDefault();
-        exporter.exportPdf();
+        void exporter.exportPdf().catch(ignoreExportRejection);
       }
     };
 
@@ -79,10 +103,170 @@
 
   listen('markdown-updated', () => {
     shared.error = null;
+    // A fresh deck invalidates every measurement. The $effect above only prunes
+    // indices past the end, so without this a shorter-but-different deck could
+    // satisfy the readiness check below using the previous deck's heights.
+    heights = {};
   });
 
   listen('slide-changed', () => {
     shared.error = null;
+  });
+
+  /** Emitted once the deck is parsed, measured, and painted. */
+  const EVENT_DECK_READY = 'deck-ready';
+  /** Emitted when the deck cannot be shown at all. */
+  const EVENT_DECK_FAILED = 'deck-failed';
+
+  /** How often the readiness conditions are re-checked. */
+  const POLL_INTERVAL_MS = 50;
+  /** Cap on how long `nextFrames` will wait for frames that may never come. */
+  const FRAME_WAIT_CAP_MS = 1000;
+
+  /**
+   * Wait for layout to settle, not merely for Svelte to have updated.
+   *
+   * Capped with a timer because an offscreen or occluded window is not
+   * guaranteed to be painted: compositors are free to stop delivering animation
+   * frames to one, and CLI export deliberately parks the window offscreen. Two
+   * frames is what we want, but never at the cost of hanging forever.
+   */
+  function nextFrames(): Promise<void> {
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(cap);
+        resolve();
+      };
+      const cap = setTimeout(done, FRAME_WAIT_CAP_MS);
+      requestAnimationFrame(() => requestAnimationFrame(done));
+    });
+  }
+
+  /**
+   * Resolve once `condition` holds, or reject when `timeoutMs` elapses.
+   *
+   * Polls rather than watching the state reactively. An `$effect` would be the
+   * idiomatic choice, but these conditions are awaited from an async `onMount`
+   * callback, and effects created in a detached `$effect.root` from there are
+   * not reliably re-run — which showed up as an export that waited out its full
+   * timeout while the deck sat fully rendered behind it. Polling every 50ms for
+   * something that takes about a second is cheap and has no such failure mode.
+   */
+  function until(condition: () => boolean, what: string, timeoutMs: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const deadline = Date.now() + timeoutMs;
+
+      const check = () => {
+        let satisfied: boolean;
+        try {
+          satisfied = condition();
+        } catch (error) {
+          reject(error);
+          return;
+        }
+
+        if (satisfied) {
+          resolve();
+        } else if (Date.now() >= deadline) {
+          reject(new Error(`timed out waiting for ${what}`));
+        } else {
+          setTimeout(check, POLL_INTERVAL_MS);
+        }
+      };
+
+      check();
+    });
+  }
+
+  /**
+   * Wait until the deck is genuinely ready to be rendered to paper.
+   *
+   * PDF export prints the live, realized webview precisely because layout, font
+   * resolution, and MathML measurement are already settled there — so "the file
+   * parsed" is far too weak a signal. All four conditions matter:
+   *
+   *  1. `generation > 0` — a parse from *this* process has arrived, rather than
+   *     the deck merely being non-empty.
+   *  2. every slide has reported its natural height, meaning each one has been
+   *     laid out and measured, and `fitScale` is derived from a complete set.
+   *  3. fonts have resolved — text measured against a fallback face reflows once
+   *     the real one arrives, which on paper shows up as clipped or shifted text.
+   *  4. two frames have passed, so the scale derived from (2) has actually been
+   *     applied rather than merely computed.
+   */
+  async function waitForDeckReady(timeoutMs: number): Promise<void> {
+    await until(
+      () => shared.generation > 0 && shared.slides.length > 0 && shared.error === null,
+      'the deck to be parsed',
+      timeoutMs
+    );
+
+    await until(
+      () => Object.keys(heights).length === shared.slides.length,
+      'every slide to be measured',
+      timeoutMs
+    );
+
+    // Not every engine implements the font loading API; where it is missing,
+    // there is nothing to wait for.
+    await document.fonts?.ready;
+    await nextFrames();
+  }
+
+  /**
+   * What the readiness check can currently see.
+   *
+   * Appended to a timeout so the failure names the condition that did not hold,
+   * rather than leaving a CI log with nothing but "timed out" to work from.
+   */
+  function readinessState(): string {
+    return [
+      `generation=${shared.generation}`,
+      `slides=${shared.slides.length}`,
+      `measured=${Object.keys(heights).length}`,
+      `error=${shared.error ? JSON.stringify(shared.error.message) : 'none'}`
+    ].join(' ');
+  }
+
+  /**
+   * Announce readiness, and carry out a CLI export if one was requested.
+   *
+   * In the GUI these events have no listener and nothing else happens — the
+   * request is always `null`. In CLI export mode the very same exporter the
+   * NavBar buttons call is invoked with the path from argv, which is what makes
+   * `slideflare export` a test of the shipping code path rather than of a
+   * parallel one.
+   */
+  onMount(async () => {
+    let request: CliExportRequest | null = null;
+    try {
+      request = await invoke<CliExportRequest | null>('cli_export_request');
+    } catch (error) {
+      console.error('Failed to read the CLI export request:', error);
+    }
+
+    // The CLI supplies its own budget; the GUI just wants the event announced.
+    const timeoutMs = request ? CLI_READY_TIMEOUT_MS : GUI_READY_TIMEOUT_MS;
+
+    try {
+      await waitForDeckReady(timeoutMs);
+    } catch (error) {
+      const message = `${shared.error?.message ?? String(error)} [${readinessState()}]`;
+      await emit(EVENT_DECK_FAILED, message);
+      if (request) await invoke('cli_export_finish', { ok: false, message });
+      return;
+    }
+
+    await emit(EVENT_DECK_READY, shared.slides.length);
+    if (!request) return;
+
+    try {
+      if (request.kind === 'pdf') await exporter.exportPdf(request.outPath);
+      else await exporter.exportHtml(request.outPath);
+      await invoke('cli_export_finish', { ok: true, message: request.outPath });
+    } catch (error) {
+      await invoke('cli_export_finish', { ok: false, message: String(error) });
+    }
   });
 </script>
 
@@ -105,8 +289,8 @@
 </svelte:head>
 
 <NavBar
-  onExportHtml={() => exporter.exportHtml()}
-  onExportPdf={() => exporter.exportPdf()}
+  onExportHtml={() => void exporter.exportHtml().catch(ignoreExportRejection)}
+  onExportPdf={() => void exporter.exportPdf().catch(ignoreExportRejection)}
   exportDisabled={exporter.busy}
 />
 
