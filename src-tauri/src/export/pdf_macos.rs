@@ -68,7 +68,10 @@ unsafe fn run(webview: *mut std::ffi::c_void, path: &str) -> Result<String, Stri
     // a CI runner has none configured, and a print operation that quietly falls
     // back to looking for one is the macOS analogue of the `lpr` trap already
     // documented for the GTK backend.
-    eprintln!("slideflare: macOS print settings: {:?}", print_info.dictionary());
+    eprintln!(
+        "slideflare: macOS print settings: {:?}",
+        print_info.dictionary()
+    );
 
     let operation = webview.printOperationWithPrintInfo(&print_info);
     operation.setShowsPrintPanel(false);
