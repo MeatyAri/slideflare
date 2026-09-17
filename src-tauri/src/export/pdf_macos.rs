@@ -61,18 +61,33 @@ unsafe fn run(webview: *mut std::ffi::c_void, path: &str) -> Result<String, Stri
         .dictionary()
         .setObject_forKey(target, ProtocolObject::from_ref(NSPrintJobSavingURL));
 
+    // Dumped whole rather than field by field: the dictionary carries the
+    // resolved printer, the job disposition and the saving URL together, and
+    // naming each one individually would mean pulling in more of objc2-app-kit
+    // for no extra information. The resolved printer is the interesting part —
+    // a CI runner has none configured, and a print operation that quietly falls
+    // back to looking for one is the macOS analogue of the `lpr` trap already
+    // documented for the GTK backend.
+    eprintln!("slideflare: macOS print settings: {:?}", print_info.dictionary());
+
     let operation = webview.printOperationWithPrintInfo(&print_info);
     operation.setShowsPrintPanel(false);
     operation.setShowsProgressPanel(false);
     operation.setJobTitle(Some(&NSString::from_str("SlideFlare deck")));
 
+    // Keep the job on this thread. Left to itself AppKit may run the operation
+    // on one it spawns, which makes the return value arrive before the work is
+    // done and puts the WebKit page-count handshake on a thread with no run loop
+    // pumping it.
+    operation.setCanSpawnSeparateThread(false);
+
     // This backend is the least-proven of the three and cannot be stepped
     // through on the machines that usually build it, so it says where it got to.
-    // `runOperation` is the line that hangs when WebKit is not rendering — an
-    // occluded webview never produces pages — and without these two markers a
-    // failure is indistinguishable from the deck never becoming ready at all.
-    // Stderr is invisible to a GUI launch and is exactly where the CLI and CI
-    // look.
+    // `runOperation` is the line that hangs: WebKit asks the web content process
+    // for a page count and waits, and on a CI runner that reply has not been
+    // arriving. Without these markers the hang is indistinguishable from a deck
+    // that never became ready. Stderr is invisible to a GUI launch and is
+    // exactly where the CLI and CI look.
     eprintln!("slideflare: macOS print operation starting");
     let produced = operation.runOperation();
     eprintln!("slideflare: macOS print operation returned {produced}");
