@@ -1,7 +1,12 @@
 # Testing the platform-dependent export code
 
-Status as of 2026-09-16. Tiers 1 and 2 are implemented, along with the cheap
+Status as of 2026-09-17. Tiers 1 and 2 are implemented, along with the cheap
 half of tier 3; the rest of tier 3 and tier 4 are planned.
+
+**Both exports now pass on all three platforms.** That is new: before this, only
+the Linux PDF backend had ever been executed. Getting there took four CI rounds
+and turned up two genuine macOS bugs, one of them in code that had shipped
+untested — which is the entire argument for tier 2.
 
 ## The problem
 
@@ -14,8 +19,9 @@ unrelated native APIs:
 | Windows     | WebView2 `PrintToPdf`            | `src-tauri/src/export/pdf_windows.rs` |
 | macOS       | `WKWebView` + `NSPrintOperation` | `src-tauri/src/export/pdf_macos.rs`   |
 
-Only the Linux backend has ever been executed. Windows and macOS type-check
-against the real APIs but are runtime-unverified.
+Until Tier 2 landed, only the Linux backend had ever been executed; Windows and
+macOS type-checked against the real APIs but were runtime-unverified. All three
+are now exercised on every push — and the macOS one turned out to be broken.
 
 Worse, until Tier 1 landed, the only workflow that compiled the Rust side at all
 (`.github/workflows/tauri-action.yml`) triggered on `push: tags: ['app-v*']`.
@@ -74,13 +80,19 @@ webview has to run on each OS.
 three runners, which builds the frontend and the binary and then runs:
 
 ```
-slideflare export pdf  examples/example.md -o out.pdf
 slideflare export html examples/example.md -o out.html
+slideflare export pdf  examples/example.md -o out.pdf
 ```
 
 under `xvfb-run` on Linux and directly elsewhere, asserting the exit code and the
 output. Both exports are also kept as build artifacts, so a failure can be looked
 at rather than only read about.
+
+They are separate steps, HTML first, deliberately. They exercise different halves
+of the feature — HTML harvests the runtime stylesheet, PDF drives the platform
+print pipeline — and while they shared one step a PDF failure hid whether HTML
+had worked at all. That is not hypothetical either: it is what obscured, for two
+rounds, that macOS was fine apart from the print call.
 
 ### Why the CLI was the right vehicle
 
@@ -117,35 +129,63 @@ Unchanged by the CLI:
   `windows-latest`, so the WebView2 runtime is present on the image and
   `PrintToPdf` completes without an interactive desktop. This was the open
   question; it is now closed.
-- **macOS** — `NSPrintOperation` needs AppKit with a window server session. The
-  activation policy is set to accessory to avoid a dock icon. Headless
-  `runOperation()` was called the least-trusted piece of the whole feature, and
-  the first run bore that out — see below.
+- **macOS** — `NSPrintOperation` needs AppKit with a window server session, which
+  the runners do provide. The activation policy is set to accessory to avoid a
+  dock icon. `runOperation()` was called the least-trusted piece of the whole
+  feature and the first runs bore that out: it hangs, and the backend now uses
+  `runOperationModalForWindow:` instead. **Confirmed working** — see below.
 
-### What the first run found on macOS
+### What the first runs found on macOS — and the fix
 
-The first `export-smoke` run failed on `macos-latest` with exit code 4, the
-watchdog's timeout. Nothing else was printed: readiness had been reached (a
-readiness failure reports itself and exits 1), so the deck had parsed, measured
-and laid out, and the run then sat in `runOperation()` until the watchdog killed
-it at 120s.
+macOS was the only platform that failed, and it failed twice over. Both are
+fixed; all three platforms now pass both exports. The path there is worth
+recording, because almost every cheap explanation turned out to be wrong.
 
-The suspected cause is **occlusion**, not printing as such. AppKit reports a
-fully offscreen window as occluded, and WebKit suspends rendering in the web
-content process for an occluded `WKWebView`; the print pipeline then waits
-forever for pages that are never drawn. It is the same shape as the animation
-frames an unpainted window never delivers, which had already cost one debugging
-round on Linux.
+**Run 1 — a build break.** `tauri::generate_context!` had been expanded twice,
+once per CLI mode. Each expansion emits an `_EMBED_INFO_PLIST` symbol, so the
+link failed with ``symbol `_EMBED_INFO_PLIST` is already defined``. It is
+macOS-only and completely invisible elsewhere: `cargo clippy --all-targets -D
+warnings` and `cargo test` both pass on Linux with two expansions present. Tier 1
+caught it. `cli::gui::run_app` now holds the single expansion.
 
-So `configure_export_window` no longer moves the window offscreen on macOS — it
-stays where `tauri.conf.json` centres it, visible for the seconds a render takes,
-with the accessory activation policy still keeping it out of the Dock.
-`pdf_macos.rs` also now brackets `runOperation` with two stderr markers, because
-this backend cannot be stepped through on the machines that usually build it and
-a hang is otherwise indistinguishable from a deck that never became ready.
+**Runs 1–3 — the print hang.** `export-smoke` exited 4, the watchdog's timeout,
+with nothing else logged. Diagnosis took three rounds because the obvious causes
+were all innocent:
 
-If that does not settle it, the next thing to try is
-`runOperationModalForWindow:` as originally suggested.
+- _Not readiness._ A readiness failure reports itself and exits 1. Markers later
+  showed the deck ready in 9s.
+- _Not the deck._ HTML export on the same runner succeeded, producing 5.3MB —
+  so parsing, layout, fonts and the runtime stylesheet harvest all work there.
+- _Not occlusion._ The window was being parked offscreen, and AppKit does treat
+  a fully offscreen window as occluded, which suspends WebKit rendering. Fixing
+  that was correct and is kept — `configure_export_window` no longer moves the
+  window offscreen on macOS — but it did not fix the hang.
+- _Not a missing printer._ The suspicion was the macOS analogue of the `lpr`
+  trap below: a runner with no printer configured. Dumping the whole print
+  dictionary disproved it — the runner resolves a real `NSPrinter`, and
+  `NSJobDisposition`, `NSJobSavingURL` and `NSSavePath` are all set correctly.
+- _Not the thread._ `with_webview` does dispatch to the main thread, and
+  `setCanSpawnSeparateThread(false)` changed nothing.
+
+What remained was the call itself. `printOperationWithPrintInfo:` returned in
+20ms; `runOperation()` then never returned at all. It blocks the calling thread
+in a nested run loop while WebKit asks its web content process for a page count,
+and on this runner that reply is never serviced.
+
+The fix is `runOperationModalForWindow:delegate:didRunSelector:contextInfo:` —
+exactly what the earlier draft of this document guessed at. It schedules the job
+and returns immediately, so the main run loop stays free to deliver the reply,
+and reports the outcome through a delegate declared with `define_class!` in
+`pdf_macos.rs`. Success is still only claimed once the print genuinely finished,
+now from the callback rather than a return value, so the silent-success hazard
+stays closed.
+
+The print went from hanging for 120s to completing in **0.84s**.
+
+`pdf_macos.rs` keeps its stderr markers around the operation. This backend cannot
+be stepped through on the machines that usually build it, and a hang is otherwise
+indistinguishable from a deck that never became ready — those two lines are what
+turned round three from a guess into a diagnosis.
 
 ### A macOS-only build trap: `generate_context!`
 
@@ -267,11 +307,18 @@ flap.
 on Linux via `pdfinfo`, with the expected slide count taken from `slideflare
 validate` rather than hardcoded so the fixture can grow.
 
-**Item 4 is still open.** It was verified by hand once on Linux — page 1 of
-`examples/example.md` rasterizes to a dominant `rgb(25, 60, 184)` against the
-`bg-blue-800` (`#1e40af`) the frontmatter asks for, close enough to confirm
-`print-color-adjust` is doing its job — but that check is not yet in CI, and it
-is the one that would actually catch a blank page.
+**Item 4 is still open in CI**, though it has now been run by hand on both
+platforms that produce a PDF differently. Page 1 of `examples/example.md`
+rasterizes to a dominant `rgb(25, 60, 184)` against the `bg-blue-800`
+(`#1e40af`) the frontmatter asks for — and it is the _same_ value from the Linux
+GTK backend and from the macOS Quartz one, which says `print-color-adjust` is
+working and neither is emitting a blank page. Worth automating on Linux, since
+it is the only assertion that catches the failure mode this document calls the
+dangerous one.
+
+For the record, the macOS artifact also satisfies items 2 and 3 by hand: 7 pages
+for 7 slides, `960 x 540 pts`. Only the Linux job asserts those automatically,
+because that is the runner with poppler available without fuss.
 
 ## Tier 4 — coverage automation cannot reach
 
