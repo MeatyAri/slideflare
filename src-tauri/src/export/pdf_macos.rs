@@ -66,7 +66,18 @@ unsafe fn run(webview: *mut std::ffi::c_void, path: &str) -> Result<String, Stri
     operation.setShowsProgressPanel(false);
     operation.setJobTitle(Some(&NSString::from_str("SlideFlare deck")));
 
-    if operation.runOperation() {
+    // This backend is the least-proven of the three and cannot be stepped
+    // through on the machines that usually build it, so it says where it got to.
+    // `runOperation` is the line that hangs when WebKit is not rendering — an
+    // occluded webview never produces pages — and without these two markers a
+    // failure is indistinguishable from the deck never becoming ready at all.
+    // Stderr is invisible to a GUI launch and is exactly where the CLI and CI
+    // look.
+    eprintln!("slideflare: macOS print operation starting");
+    let produced = operation.runOperation();
+    eprintln!("slideflare: macOS print operation returned {produced}");
+
+    if produced {
         Ok(path.to_string())
     } else {
         Err("macOS refused to produce the PDF.".to_string())

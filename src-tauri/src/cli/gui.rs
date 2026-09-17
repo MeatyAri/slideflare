@@ -10,11 +10,14 @@
 //!    and on GTK an unmapped window may never realize at all. Offscreen keeps it
 //!    realized while keeping it out of the user's face.
 //!
-//!    Positioning is best-effort: Wayland has no notion of global window
-//!    coordinates, so compositors there ignore the move and the window is simply
-//!    visible for the duration of the render. That is cosmetic rather than
-//!    harmful, and it does not affect CI, which runs under `xvfb` — an X server,
-//!    where the move works.
+//!    Positioning is best-effort, and skipped entirely on macOS. Wayland has no
+//!    notion of global window coordinates, so compositors there ignore the move
+//!    and the window is simply visible for the duration of the render — cosmetic
+//!    rather than harmful, and irrelevant to CI, which runs under `xvfb`, an X
+//!    server, where the move works. macOS is worse than cosmetic: AppKit treats
+//!    a fully offscreen window as occluded and WebKit then suspends rendering,
+//!    so the print waits forever for pages that never come. See
+//!    `configure_export_window`.
 //! 2. `AppState` carries a [`CliExportRequest`], which the frontend picks up and
 //!    acts on once the deck reports itself laid out.
 //!
@@ -26,7 +29,10 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use tauri::{LogicalPosition, LogicalSize, Manager, RunEvent};
+use tauri::{LogicalSize, Manager, RunEvent};
+// Only the offscreen move needs this, and that is skipped on macOS.
+#[cfg(not(target_os = "macos"))]
+use tauri::LogicalPosition;
 
 use super::{exit, fail, resolve_deck, resolve_output, ExportArgs};
 use crate::export::CliExportRequest;
@@ -36,6 +42,8 @@ use crate::watcher::AppState;
 ///
 /// Far enough off any plausible desktop to be invisible, while still being a
 /// real mapped window that the compositor and GTK will realize and lay out.
+/// Not used on macOS — see `configure_export_window`.
+#[cfg(not(target_os = "macos"))]
 const OFFSCREEN: f64 = -10_000.0;
 
 /// Window size for export mode, in CSS pixels.
@@ -76,12 +84,91 @@ fn builder() -> tauri::Builder<tauri::Wry> {
 ///
 /// `None` is the untouched original behaviour: the drag-and-drop screen.
 pub fn run(deck: Option<PathBuf>) -> i32 {
-    builder()
-        .manage(AppState::new(deck.map(path_to_string), None))
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    run_app(AppState::new(deck.map(path_to_string), None), false)
+}
 
-    exit::OK
+/// Start the app, in whichever mode.
+///
+/// Both modes go through here for one concrete reason: `tauri::generate_context!`
+/// must be expanded **exactly once per crate**. On macOS every expansion emits an
+/// `_EMBED_INFO_PLIST` symbol, so a second one anywhere fails the link with
+/// "symbol `_EMBED_INFO_PLIST` is already defined" — and only on macOS, so
+/// neither a Linux nor a Windows build will warn you about it first.
+fn run_app(state: AppState, export_mode: bool) -> i32 {
+    let builder = builder().manage(state).setup(move |app| {
+        if export_mode {
+            configure_export_window(app)?;
+        }
+        Ok(())
+    });
+
+    // The one and only expansion. Read the note above before adding another.
+    let context = tauri::generate_context!();
+
+    if !export_mode {
+        builder
+            .run(context)
+            .expect("error while running tauri application");
+        return exit::OK;
+    }
+
+    let app = builder
+        .build(context)
+        .expect("error while building tauri application");
+
+    // Tauri exits the process with 0 when the last window closes. Left alone
+    // that would turn "the user closed the render window" — or a webview that
+    // died on startup — into a silent success, which is precisely the blank-PDF
+    // failure mode `docs/testing-platform-exports.md` warns is the dangerous
+    // one. Nothing but `finish_export` is allowed to report success.
+    app.run(|_app, event| {
+        if matches!(event, RunEvent::Exit) && !EXPORT_SETTLED.load(Ordering::SeqCst) {
+            eprintln!("slideflare: the render window closed before the export finished");
+            let _ = std::io::stderr().flush();
+            std::process::exit(exit::FAILURE);
+        }
+    });
+
+    // Unreachable in practice: the callback above exits first.
+    fail("export ended without reporting a result")
+}
+
+/// Put the render window where a batch job belongs: realized, but out of sight.
+fn configure_export_window(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    // No dock icon or app switcher entry for what is a batch job. Must happen
+    // before the window is shown or macOS activates the app.
+    #[cfg(target_os = "macos")]
+    app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+    let window = app
+        .get_webview_window("main")
+        .expect("the main window is declared in tauri.conf.json");
+
+    // Realized but out of sight — see the module comment for why this is not
+    // `set_visible(false)`.
+    window.set_decorations(false)?;
+    window.set_size(LogicalSize::new(EXPORT_WIDTH, EXPORT_HEIGHT))?;
+
+    // Everywhere but macOS, park it far off any plausible desktop.
+    //
+    // macOS is excluded deliberately. AppKit reports a fully offscreen window as
+    // occluded, and WebKit suspends rendering in the web content process for an
+    // occluded WKWebView. The print pipeline then waits forever for pages that
+    // are never drawn, which is exactly how this presented: readiness reached,
+    // then `runOperation` hanging until the watchdog fired. It is the same trap
+    // as the animation frames an unpainted window never delivers — see
+    // `nextFrames` in `src/routes/view-slides/+page.svelte`.
+    //
+    // So on macOS the window stays where `tauri.conf.json` centres it, visible
+    // for the few seconds a render takes. The activation policy above already
+    // keeps it out of the Dock and the app switcher.
+    #[cfg(not(target_os = "macos"))]
+    {
+        window.set_position(LogicalPosition::new(OFFSCREEN, OFFSCREEN))?;
+        window.set_skip_taskbar(true)?;
+    }
+
+    Ok(())
 }
 
 /// Render a deck to PDF or HTML and exit with the result.
@@ -127,49 +214,10 @@ pub fn run_export(args: ExportArgs, quiet: bool) -> i32 {
 
     start_watchdog(args.timeout);
 
-    let app = builder()
-        .manage(AppState::new(Some(path_to_string(deck)), Some(request)))
-        .setup(|app| {
-            // No dock icon or app switcher entry for what is a batch job. Must
-            // happen before the window is shown or macOS activates the app.
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-
-            let window = app
-                .get_webview_window("main")
-                .expect("the main window is declared in tauri.conf.json");
-
-            // Realized but out of sight — see the module comment for why this is
-            // not `set_visible(false)`.
-            window.set_decorations(false)?;
-            window.set_size(LogicalSize::new(EXPORT_WIDTH, EXPORT_HEIGHT))?;
-            window.set_position(LogicalPosition::new(OFFSCREEN, OFFSCREEN))?;
-
-            // Unavailable on macOS in Tauri 2, and unnecessary there: the
-            // activation policy above already keeps it out of the Dock.
-            #[cfg(not(target_os = "macos"))]
-            window.set_skip_taskbar(true)?;
-
-            Ok(())
-        })
-        .build(tauri::generate_context!())
-        .expect("error while building tauri application");
-
-    // Tauri exits the process with 0 when the last window closes. Left alone
-    // that would turn "the user closed the render window" — or a webview that
-    // died on startup — into a silent success, which is precisely the blank-PDF
-    // failure mode `docs/testing-platform-exports.md` warns is the dangerous
-    // one. Nothing but `finish_export` is allowed to report success.
-    app.run(|_app, event| {
-        if matches!(event, RunEvent::Exit) && !EXPORT_SETTLED.load(Ordering::SeqCst) {
-            eprintln!("slideflare: the render window closed before the export finished");
-            let _ = std::io::stderr().flush();
-            std::process::exit(exit::FAILURE);
-        }
-    });
-
-    // Unreachable in practice: the callback above exits first.
-    fail("export ended without reporting a result")
+    run_app(
+        AppState::new(Some(path_to_string(deck)), Some(request)),
+        true,
+    )
 }
 
 /// Print the outcome of a CLI export and end the process with the right code.

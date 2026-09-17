@@ -113,14 +113,50 @@ Unchanged by the CLI:
 - **Linux** — GTK needs `DISPLAY` or `WAYLAND_DISPLAY`; `gtk_init` fails
   outright without one. Requires `xvfb-run`.
 - **Windows** — WebView2 needs an `HWND` to create a controller. A hidden window
-  is fine. Needs the WebView2 runtime present on the runner (believed
-  preinstalled on the Windows Server images). The `export-smoke` job settles this
-  either way on its first run: if the runtime is missing, that is where it shows.
-- **macOS** — `NSPrintOperation` needs AppKit with a window server session. Set
-  the activation policy to accessory/prohibited to avoid a dock icon. GitHub's
-  macOS runners do provide a session, but headless `runOperation()` is the
-  least-trusted piece of the whole feature and may need
-  `runOperationModalForWindow:` instead.
+  is fine. **Confirmed working**: the first `export-smoke` run passed on
+  `windows-latest`, so the WebView2 runtime is present on the image and
+  `PrintToPdf` completes without an interactive desktop. This was the open
+  question; it is now closed.
+- **macOS** — `NSPrintOperation` needs AppKit with a window server session. The
+  activation policy is set to accessory to avoid a dock icon. Headless
+  `runOperation()` was called the least-trusted piece of the whole feature, and
+  the first run bore that out — see below.
+
+### What the first run found on macOS
+
+The first `export-smoke` run failed on `macos-latest` with exit code 4, the
+watchdog's timeout. Nothing else was printed: readiness had been reached (a
+readiness failure reports itself and exits 1), so the deck had parsed, measured
+and laid out, and the run then sat in `runOperation()` until the watchdog killed
+it at 120s.
+
+The suspected cause is **occlusion**, not printing as such. AppKit reports a
+fully offscreen window as occluded, and WebKit suspends rendering in the web
+content process for an occluded `WKWebView`; the print pipeline then waits
+forever for pages that are never drawn. It is the same shape as the animation
+frames an unpainted window never delivers, which had already cost one debugging
+round on Linux.
+
+So `configure_export_window` no longer moves the window offscreen on macOS — it
+stays where `tauri.conf.json` centres it, visible for the seconds a render takes,
+with the accessory activation policy still keeping it out of the Dock.
+`pdf_macos.rs` also now brackets `runOperation` with two stderr markers, because
+this backend cannot be stepped through on the machines that usually build it and
+a hang is otherwise indistinguishable from a deck that never became ready.
+
+If that does not settle it, the next thing to try is
+`runOperationModalForWindow:` as originally suggested.
+
+### A macOS-only build trap: `generate_context!`
+
+`tauri::generate_context!` must be expanded **exactly once per crate**. Each
+expansion emits an `_EMBED_INFO_PLIST` symbol, so a second one fails the link
+with ``symbol `_EMBED_INFO_PLIST` is already defined``.
+
+This is macOS-only, and it is invisible locally on any other platform: a full
+`cargo clippy --all-targets -D warnings` and `cargo test` pass on Linux with two
+expansions present. Tier 1 compile coverage is what caught it. `cli::gui::run_app`
+now funnels both modes through a single expansion.
 
 ### The design catch, and how it turned out
 

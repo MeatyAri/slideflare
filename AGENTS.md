@@ -113,7 +113,13 @@ Three things that will bite:
 - **The export window is offscreen but realized**, never hidden — an unmapped GTK
   window may never realize, and the PDF is printed from the live webview. It may
   therefore never be painted, so nothing may wait on `requestAnimationFrame`
-  without a timer to fall back on.
+  without a timer to fall back on. On macOS it is not moved offscreen at all:
+  AppKit calls a fully offscreen window occluded and WebKit then stops rendering,
+  which hangs the print.
+- **`tauri::generate_context!` may be expanded only once in the crate.** Every
+  expansion emits an `_EMBED_INFO_PLIST` symbol, and a second one fails the macOS
+  link — invisible on Linux and Windows, so CI is what tells you. `run_app` holds
+  the single call.
 
 Export mode hands the work to the frontend rather than reimplementing it: the
 deck signals `deck-ready` from `waitForDeckReady` in
