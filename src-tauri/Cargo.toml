@@ -83,6 +83,12 @@ objc2-foundation = { version = "0.3", features = [
 objc2-app-kit = { version = "0.3", features = [
   "NSPrintInfo",
   "NSPrintOperation",
+  # `runOperationModalForWindow:` and `NSView::window` both sit behind these.
+  # The synchronous `runOperation()` needs none of them, but it hangs — see the
+  # comment at the top of `src/export/pdf_macos.rs`.
+  "NSResponder",
+  "NSView",
+  "NSWindow",
 ] }
 # `printOperationWithPrintInfo:` lives in a `WKWebView` impl block gated behind
 # objc2-web-kit's own `objc2-app-kit` feature, which wry does not enable.

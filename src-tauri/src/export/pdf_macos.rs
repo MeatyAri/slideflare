@@ -10,33 +10,100 @@
 //!
 //! Saving straight to a file without a panel is an `NSPrintInfo` job
 //! disposition of `NSPrintSaveJob` plus an `NSPrintJobSavingURL` attribute.
+//!
+//! The operation is started with `runOperationModalForWindow:` rather than the
+//! simpler `runOperation()`. That is not a style choice — `runOperation()` was
+//! measured hanging indefinitely on a CI runner. It blocks the calling thread in
+//! a nested run loop while WebKit asks its web content process for a page count,
+//! and that reply was never getting serviced, so the call never returned. The
+//! modal form schedules the job and returns immediately, leaving the main run
+//! loop free to deliver the reply, and reports the outcome through a delegate
+//! callback. Everything else about this file was ruled out first: the runner
+//! resolves a real `NSPrinter`, the save URL and job disposition are both set
+//! correctly, and pinning the job to the calling thread changed nothing.
 
+use std::ffi::c_void;
 use std::path::PathBuf;
 
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, ProtocolObject};
+use objc2::{define_class, msg_send, sel, AnyThread, DefinedClass};
 use objc2_app_kit::{NSPrintInfo, NSPrintJobSavingURL, NSPrintSaveJob, NSPrintingPaginationMode};
-use objc2_foundation::{NSSize, NSString, NSURL};
+use objc2_foundation::{NSObject, NSObjectProtocol, NSSize, NSString, NSURL};
 use objc2_web_kit::WKWebView;
 use tauri::WebviewWindow;
 
 use super::{emit_result, PAGE_HEIGHT_PT, PAGE_WIDTH_PT};
 
+/// What the delegate needs in order to report the outcome.
+struct PrintDelegateIvars {
+    window: WebviewWindow,
+    path: String,
+}
+
+define_class!(
+    // SAFETY:
+    // - `NSObject` imposes no subclassing requirements.
+    // - `PrintDelegate` does not implement `Drop`.
+    #[unsafe(super(NSObject))]
+    #[name = "SlideFlarePrintDelegate"]
+    #[ivars = PrintDelegateIvars]
+    struct PrintDelegate;
+
+    impl PrintDelegate {
+        /// AppKit's completion callback for `runOperationModalForWindow:`.
+        ///
+        /// The selector name and signature are fixed by AppKit; getting either
+        /// wrong means this is simply never called and the export hangs until
+        /// the watchdog fires.
+        #[unsafe(method(printOperationDidRun:success:contextInfo:))]
+        fn print_operation_did_run(
+            &self,
+            _operation: *mut AnyObject,
+            success: bool,
+            _context: *mut c_void,
+        ) {
+            let ivars = self.ivars();
+
+            let result = if success {
+                Ok(ivars.path.clone())
+            } else {
+                Err("macOS refused to produce the PDF.".to_string())
+            };
+
+            eprintln!("slideflare: macOS print operation finished, success={success}");
+            emit_result(&ivars.window, result);
+        }
+    }
+
+    unsafe impl NSObjectProtocol for PrintDelegate {}
+);
+
 pub fn print_to_pdf(window: &WebviewWindow, path: PathBuf) -> Result<(), String> {
     let reported_path = path.to_string_lossy().into_owned();
     let window = window.clone();
+
     // A second handle: the closure below takes ownership of `window`.
     let handle = window.clone();
 
     handle
         .with_webview(move |platform| {
-            let outcome = unsafe { run(platform.inner(), &reported_path) };
-            emit_result(&window, outcome);
+            // Unlike the other two backends this reports nothing here on
+            // success: the print is asynchronous now, and only the delegate
+            // knows whether it worked. A failure to *start* is still immediate.
+            if let Err(message) = unsafe { start(platform.inner(), window.clone(), &reported_path) }
+            {
+                emit_result(&window, Err(message));
+            }
         })
         .map_err(|e| format!("Could not reach the webview to print: {}", e))
 }
 
-unsafe fn run(webview: *mut std::ffi::c_void, path: &str) -> Result<String, String> {
+unsafe fn start(
+    webview: *mut std::ffi::c_void,
+    window: WebviewWindow,
+    path: &str,
+) -> Result<(), String> {
     let webview = Retained::retain(webview.cast::<WKWebView>())
         .ok_or_else(|| "Could not get the WKWebView to print.".to_string())?;
 
@@ -61,43 +128,40 @@ unsafe fn run(webview: *mut std::ffi::c_void, path: &str) -> Result<String, Stri
         .dictionary()
         .setObject_forKey(target, ProtocolObject::from_ref(NSPrintJobSavingURL));
 
-    // Dumped whole rather than field by field: the dictionary carries the
-    // resolved printer, the job disposition and the saving URL together, and
-    // naming each one individually would mean pulling in more of objc2-app-kit
-    // for no extra information. The resolved printer is the interesting part —
-    // a CI runner has none configured, and a print operation that quietly falls
-    // back to looking for one is the macOS analogue of the `lpr` trap already
-    // documented for the GTK backend.
-    eprintln!(
-        "slideflare: macOS print settings: {:?}",
-        print_info.dictionary()
-    );
-
     let operation = webview.printOperationWithPrintInfo(&print_info);
     operation.setShowsPrintPanel(false);
     operation.setShowsProgressPanel(false);
     operation.setJobTitle(Some(&NSString::from_str("SlideFlare deck")));
 
-    // Keep the job on this thread. Left to itself AppKit may run the operation
-    // on one it spawns, which makes the return value arrive before the work is
-    // done and puts the WebKit page-count handshake on a thread with no run loop
-    // pumping it.
-    operation.setCanSpawnSeparateThread(false);
+    // The window the sheet would attach to. With both panels suppressed nothing
+    // is actually presented, but AppKit still requires one.
+    let doc_window = webview
+        .window()
+        .ok_or_else(|| "The webview is not in a window, so it cannot be printed.".to_string())?;
 
-    // This backend is the least-proven of the three and cannot be stepped
-    // through on the machines that usually build it, so it says where it got to.
-    // `runOperation` is the line that hangs: WebKit asks the web content process
-    // for a page count and waits, and on a CI runner that reply has not been
-    // arriving. Without these markers the hang is indistinguishable from a deck
-    // that never became ready. Stderr is invisible to a GUI launch and is
-    // exactly where the CLI and CI look.
+    let delegate = PrintDelegate::alloc().set_ivars(PrintDelegateIvars {
+        window,
+        path: path.to_string(),
+    });
+    let delegate: Retained<PrintDelegate> = msg_send![super(delegate), init];
+
+    // Bound explicitly rather than coerced inline, so the delegate argument
+    // cannot silently resolve to the wrong thing.
+    let delegate_ref: &AnyObject = &delegate;
+
     eprintln!("slideflare: macOS print operation starting");
-    let produced = operation.runOperation();
-    eprintln!("slideflare: macOS print operation returned {produced}");
+    operation.runOperationModalForWindow_delegate_didRunSelector_contextInfo(
+        &doc_window,
+        Some(delegate_ref),
+        Some(sel!(printOperationDidRun:success:contextInfo:)),
+        std::ptr::null_mut(),
+    );
 
-    if produced {
-        Ok(path.to_string())
-    } else {
-        Err("macOS refused to produce the PDF.".to_string())
-    }
+    // AppKit does not retain the delegate, and the callback lands long after
+    // this function returns, so the delegate has to outlive this scope. One
+    // small leak per export is the cheapest correct answer: a PDF export is
+    // rare and deliberate, and in CLI mode the process exits immediately after.
+    std::mem::forget(delegate);
+
+    Ok(())
 }
