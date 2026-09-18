@@ -118,11 +118,15 @@ Three things that will bite:
   makes it call the content visible: GTK reparents the webview into a
   `GtkOffscreenWindow` (`render_offscreen`, no window at all); Windows keeps the
   HWND hidden and forces `ICoreWebView2Controller::SetIsVisible(true)`
-  (`render_hidden`); macOS must keep its window ordered in, so it goes borderless,
-  switches off AppKit occlusion detection and moves offscreen
-  (`render_unoccluded`). A display server is still required on Linux —
+  (`render_hidden`); macOS must keep its window ordered in — AppKit calls an
+  un-ordered window occluded and WebKit then suspends the renderer — so
+  `render_unoccluded` switches off occlusion detection and moves offscreen where
+  that private selector still exists, and otherwise leaves the window put and
+  draws it at alpha 0.004 (not 0; AppKit calls a fully transparent window
+  occluded too). A display server is still required on Linux —
   `gtk_init` fails without one.
-  **Only the GTK path has ever been run.** Windows and macOS are unverified; the
+  **Windows and macOS have only ever run on CI**, never on a desktop, and cannot
+  even be compiled here. The
   fidelity gate in `.github/workflows/ci.yml` is what has to prove them. It
   renders the deck twice, once with `SLIDEFLARE_EXPORT_WINDOW=visible` (also the
   user-facing escape hatch back to a real window), and requires identical pixels

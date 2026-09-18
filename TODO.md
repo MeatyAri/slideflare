@@ -34,25 +34,29 @@
 - [ ] windowless export on Windows and macOS — written, never run (see `docs/headless-export.md`)
   - [x] Windows: `cli::gui::render_hidden` keeps the HWND hidden and forces
         `ICoreWebView2Controller::SetIsVisible(true)`
-  - [x] macOS: `cli::gui::render_unoccluded` goes borderless, switches off
-        `-[NSApplication _setWindowOcclusionDetectionEnabled:]` and moves the
-        window offscreen, since it has to stay ordered in
+  - [x] macOS: `cli::gui::render_unoccluded`. The window has to stay ordered in,
+        so it goes borderless and then either moves offscreen with
+        `-[NSApplication _setWindowOcclusionDetectionEnabled:]` switched off, or
+        — since that private selector turned out to be **gone on
+        `macos-latest`** — stays put and is drawn at alpha 0.004 (not 0; AppKit
+        calls a fully transparent window occluded too)
   - [x] frontend safety net: `nextFrames()` in `src/lib/export/export.svelte.ts`
         is capped, and `waitForDeckReady` settles images and waits for the slide
         measurements to stop moving before it trusts them
   - [x] fidelity gate in `export-smoke`: render `examples/intro-to-slideflare.md`
         twice on the same runner, once with `SLIDEFLARE_EXPORT_WINDOW=visible`,
         and require identical pixels via `scripts/pdf-pixel-diff.py`
-  - [ ] **watch that gate go green on the Windows and macOS runners.** Neither
-        path has been built, let alone run, on the platform it targets; this
-        machine has no MSVC toolchain and no macOS SDK. Until CI says otherwise,
-        both are unproven, and every claim about what WebView2 and AppKit do is
-        a citation rather than a measurement.
-  - [ ] if macOS fails: `_setWindowOcclusionDetectionEnabled:` is private and
-        probed with `respondsToSelector:`, so a missing selector degrades to a
-        visible window rather than failing. The next thing to try is a
-        zero-alpha window at its normal frame — public API, and the check is
-        cheap.
+  - [x] Windows: green on CI's first run — `webview2-hidden`, pixel-identical to
+        the windowed render on the same runner
+  - [ ] **watch macOS go green.** It reported the fallback on the first run,
+        which is how the missing occlusion selector was found; the transparent
+        path is the answer to that and has not been through a full pass yet.
+        Neither platform can be built here (no MSVC toolchain, no macOS SDK), so
+        CI is the only thing that has ever executed either.
+  - [ ] revisit the macOS window once there is a Mac to test on. A transparent
+        window is a compromise — still composited, still a window on the user's
+        screen for the couple of seconds a render takes. Whether current macOS
+        offers anything better is unanswerable from here.
 - [ ] `<video>` never renders in a GTK windowless export. A `GtkOffscreenWindow`
       starts no media pipeline, so the element never reports metadata and prints
       collapsed. `main` did the same, but only by racing the print against the

@@ -3,11 +3,16 @@
 Status: all three platforms are implemented; **only Linux/BSD is verified.**
 
 - **Linux/BSD** — landed and measured pixel-for-pixel against `main` (7c4255c).
-- **Windows and macOS** — implemented, compiled by CI, and **never run by hand
-  by anyone**. No machine was available for either. They are guarded by the
-  fidelity gate described under "Verification", which renders every deck twice
-  on the CI runner and requires the two to be identical; until that gate has
-  gone green on a real run, treat both as unproven.
+- **Windows** — landed and **green on CI's first run**: `webview2-hidden`, with
+  the windowless render pixel-identical to the windowed one on the same runner.
+  Never run on a desktop, only on `windows-latest`.
+- **macOS** — landed as `appkit-transparent`, after CI disproved the original
+  plan. See below: the private occlusion-detection selector everything was
+  supposed to hinge on does not exist on `macos-latest`.
+
+Neither Windows nor macOS has been built here — no MSVC toolchain, no macOS SDK,
+no cross C compiler, so `cargo check --target` dies in a build script for both.
+CI is the only thing that has executed either.
 
 Everything under "Evidence" was measured on one machine: Arch, Wayland session,
 WebKitGTK 2.52.5, GTK 3.24.52, GTK 4.22.4.
@@ -29,11 +34,11 @@ Two different things get called "headless", and they have different answers:
 
 |                           | Linux/BSD                                         | Windows                                      | macOS                                        |
 | ------------------------- | ------------------------------------------------- | -------------------------------------------- | -------------------------------------------- |
-| Nothing visible on screen | **Done — output identical to the windowed build** | Implemented, unverified                      | Implemented, unverified                      |
+| Nothing visible on screen | **Done — output identical to the windowed build** | **Done** — HWND never shown                  | **Done** — on screen, drawn at alpha 0.004   |
 | No window object at all   | **Done**                                          | HWND exists, never shown                     | Impossible — the window must stay ordered in |
 | No display server         | **Impossible** with WebKitGTK                     | Needs a window station (interactive session) | Needs an Aqua session                        |
 
-The short version: **(1) is achievable and has landed on GTK; (2) is not
+The short version: **(1) is achievable and has landed on all three; (2) is not
 achievable with system webviews and should be dropped as a goal.** The system
 webview _is_ the renderer, and on every platform it is a UI-toolkit widget whose
 existence requires a display connection. Chromium can go display-free because it
@@ -194,19 +199,31 @@ offscreen attempt presented, and why macOS used to be left with a centred,
 visible window. `NSPrintOperation` also insists on a real `NSWindow` for its
 (suppressed) sheet, so `-[WKWebView window]` has to keep returning one.
 
-The way out is to take away the signal rather than the window:
+So the window is always ordered in, always borderless (AppKit constrains a
+_titled_ window's frame to keep its title bar reachable, which would clamp any
+move back onto a screen), and the only question is how to stop anyone seeing it.
+Two answers, tried in order:
 
-1. Make the window borderless. AppKit constrains a _titled_ window's frame to
-   keep its title bar reachable, which would clamp the move back onto a screen;
-   a borderless window is not constrained.
-2. `-[NSApplication _setWindowOcclusionDetectionEnabled:]` with `NO`, so
-   `-[NSWindow occlusionState]` reports every window visible.
-3. Move it to `(-10000, -10000)` and order it in.
+1. **Switch occlusion detection off, then move it off every display.**
+   `-[NSApplication _setWindowOcclusionDetectionEnabled:]` with `NO` makes
+   `-[NSWindow occlusionState]` report every window visible, so the move no
+   longer suspends anything. Private API, probed with `respondsToSelector:`.
+2. **Make it transparent and leave it where it is.** A window on screen is not
+   occluded whatever its alpha, so the renderer keeps running. `alphaValue` is
+   `0.004` rather than `0`, because AppKit treats a fully transparent window as
+   not visible and that lands straight back on the suspended renderer. Mouse
+   events are passed through, so a stray click during a render hits whatever is
+   actually underneath. Public API, no version assumptions.
 
-Step 2 is private API. It is probed with `respondsToSelector:` first, and if it
-is missing the window simply stays where `tauri.conf.json` centres it and is
-visible for the few seconds a render takes — the old behaviour, which works.
-Flag it if the app is ever submitted to the App Store.
+**CI settled which one runs.** Option 1 was the whole plan; the first run
+reported the fallback instead, because `_setWindowOcclusionDetectionEnabled:` is
+**not present on the GitHub `macos-latest` image**. The selector had been there
+since 10.9 and is what offscreen-rendering macOS apps have leaned on for a
+decade, which is exactly why it was worth a `respondsToSelector:` guard rather
+than a bare call — a bare call would have been a crash, and a doc claiming it
+worked. Option 2 is therefore the path in practice; option 1 is kept because it
+is strictly better where it exists, costing no compositing at all where a
+transparent window is still drawn.
 
 ### The escape hatch
 
@@ -260,8 +277,9 @@ presentation mode still opening a normal window.
 
 Neither could be built here, let alone run: this machine has no MSVC toolchain,
 no macOS SDK, and no cross C compiler, so `cargo check --target` fails in a build
-script for both. Every claim about those two paths is reasoned from the platform
-contracts above and is worth exactly what CI says it is worth.
+script for both. Every claim about those two paths is worth exactly what CI says
+it is worth — and the first run is what corrected the macOS design, so the gate
+has already earned itself.
 
 So `export-smoke` in `.github/workflows/ci.yml` gained a gate that can fail them.
 Everything else in that job passes for a deck that rendered _wrongly_ — the
@@ -292,18 +310,18 @@ agreement, nothing tested. So every export prints the path it actually took:
 slideflare: export render mode: gtk-offscreen
 ```
 
-and CI requires the exact token for the platform it is on — `gtk-offscreen`,
-`webview2-hidden` or `appkit-unoccluded` for the windowless run, `visible-window`
-for the reference — before it compares anything. A fallback now fails the job
-instead of passing it quietly. The negative case was exercised by forcing the
-fallback locally: the step fails with
-`the windowless render fell back to 'visible-window'` while the two PDFs are
-byte-for-byte the same.
+and CI requires a token it meant for the platform it is on — `gtk-offscreen`,
+`webview2-hidden`, or either of `appkit-unoccluded`/`appkit-transparent` for the
+windowless run, and `visible-window` for the reference — before it compares
+anything. A fallback now fails the job instead of passing it quietly. Both
+directions were exercised locally: forcing the fallback fails the step while the
+two PDFs stay byte-for-byte identical.
 
-macOS reports `visible-window` rather than `appkit-unoccluded` when
-`respondsToSelector:` says the occlusion switch is gone, because without it the
-path _is_ the old behaviour under a new name, and CI should not accept it as a
-win.
+Both macOS tokens are accepted because both are genuinely windowless; what is
+never accepted there is `visible-window`, which is what the path reports if
+neither arrangement can be had. This is not theoretical — the first CI run
+returned exactly that, and it is how the missing occlusion selector was found
+rather than shipped.
 
 `scripts/pdf-pixel-diff.py` uses `pypdfium2` and `pillow` — pip wheels with the
 renderer inside them, so setup is the same two lines on all three runners, which
@@ -331,10 +349,14 @@ video source does not resolve, so both modes collapse it identically. Tracked in
 
 ## Still to do
 
-- **Watch the first green run of the fidelity gate on Windows and macOS.** Until
-  then the two paths are untested code, and the sentences above describing what
-  WebView2 and AppKit do are citations, not measurements. The gate cannot be
-  passed by a fallback, so green means the intended path ran.
+- **Watch macOS go green.** Windows passed on the first run. macOS took the
+  transparent path only after CI rejected the original one, and has not yet been
+  through a full pass. The gate cannot be satisfied by a fallback, so green
+  means the intended path ran.
+- **Revisit the macOS window once there is a Mac to test on.** A transparent
+  window is a compromise: it is still composited, and it is still a window on
+  the user's screen for the couple of seconds a render takes. Whether anything
+  better exists on current macOS is an open question this machine cannot answer.
 - **Render `<video>` in the windowless GTK export**, or decide deliberately that
   a printed deck shows a poster frame and make that explicit rather than
   emergent.

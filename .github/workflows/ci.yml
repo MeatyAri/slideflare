@@ -273,49 +273,59 @@ jobs:
         run: |
           set -euo pipefail
 
+          # `expected` is a space-separated set: macOS has two genuinely
+          # windowless arrangements and takes whichever the OS allows.
           case "${{ matrix.platform }}" in
             ubuntu-22.04)
               run() { xvfb-run -a target/release/slideflare "$@"; }
-              expected=gtk-offscreen
+              expected='gtk-offscreen'
               ;;
             windows-latest)
               run() { target/release/slideflare.exe "$@"; }
-              expected=webview2-hidden
+              expected='webview2-hidden'
               ;;
             *)
               run() { target/release/slideflare "$@"; }
-              expected=appkit-unoccluded
+              expected='appkit-unoccluded appkit-transparent'
               ;;
           esac
 
+          # Both streams, not just stderr: `xvfb-run` runs the command as
+          # `"$@" 2>&1`, so on Linux everything the binary writes arrives on
+          # *stdout* and a bare `2>` redirect captures an empty file. That
+          # looked exactly like a failed assertion on the first run.
           run export pdf ../examples/intro-to-slideflare.md \
-            -o fidelity-windowless.pdf 2> windowless.log
+            -o fidelity-windowless.pdf > windowless.log 2>&1
 
           export SLIDEFLARE_EXPORT_WINDOW=visible
           run export pdf ../examples/intro-to-slideflare.md \
-            -o fidelity-windowed.pdf 2> windowed.log
+            -o fidelity-windowed.pdf > windowed.log 2>&1
           unset SLIDEFLARE_EXPORT_WINDOW
+
+          echo '--- windowless'; cat windowless.log
+          echo '--- windowed'; cat windowed.log
 
           # Every windowless path here falls back to the old visible window if
           # the platform will not cooperate, and a fallback that engaged
           # silently would make the comparison below worthless: both sides
           # would be the *same* windowed render, agreeing perfectly and proving
-          # nothing. So the mode each run reports has to be the one intended.
+          # nothing. So the mode each run reports has to be one we meant.
           mode() { sed -n 's/^slideflare: export render mode: //p' "$1" | tail -1; }
 
           windowless=$(mode windowless.log)
           windowed=$(mode windowed.log)
-          echo "windowless=$windowless windowed=$windowed expected=$expected"
+          echo "windowless='$windowless' windowed='$windowed' expected='$expected'"
 
-          [ "$windowless" = "$expected" ] || {
-            echo "::error::the windowless render fell back to '$windowless'," \
-                 "so nothing below tests $expected"
-            cat windowless.log
-            exit 1
-          }
+          case " $expected " in
+            *" $windowless "*) ;;
+            *)
+              echo "::error::the windowless render reported '$windowless'," \
+                   "not one of: $expected"
+              exit 1
+              ;;
+          esac
           [ "$windowed" = "visible-window" ] || {
             echo "::error::the reference render reported '$windowed', not a real window"
-            cat windowed.log
             exit 1
           }
 

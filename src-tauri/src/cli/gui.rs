@@ -60,6 +60,17 @@ use crate::watcher::AppState;
 /// `SLIDEFLARE_EXPORT_WINDOW=visible` fallback everywhere else.
 const OFFSCREEN: f64 = -10_000.0;
 
+/// How visible the macOS export window is when it cannot be moved offscreen.
+///
+/// Not zero, deliberately. AppKit's occlusion detection treats a fully
+/// transparent window as not visible, which would put us back where we started
+/// — the web content process suspended and the print waiting for pages that
+/// never come. This is the smallest value that is still, formally, drawn.
+/// Against any background it is invisible; at 1280x720 for the couple of
+/// seconds a render takes, nothing is perceptible.
+#[cfg(target_os = "macos")]
+const GHOST_ALPHA: f64 = 0.004;
+
 /// Environment variable that puts the export back in a real window.
 ///
 /// Two jobs, both load-bearing:
@@ -109,6 +120,11 @@ enum RenderMode {
     /// disabled.
     #[cfg(target_os = "macos")]
     AppKitUnoccluded,
+    /// macOS, where occlusion detection could not be switched off: the window
+    /// stays on screen, where AppKit will not call it occluded, but is drawn at
+    /// an alpha nobody can see.
+    #[cfg(target_os = "macos")]
+    AppKitTransparent,
     /// The old realized window. Either asked for with `SLIDEFLARE_EXPORT_WINDOW`
     /// or fallen back to — see `RENDER_MODE_PREFIX` for why CI cares which.
     VisibleWindow,
@@ -127,6 +143,8 @@ impl RenderMode {
             RenderMode::Webview2Hidden => "webview2-hidden",
             #[cfg(target_os = "macos")]
             RenderMode::AppKitUnoccluded => "appkit-unoccluded",
+            #[cfg(target_os = "macos")]
+            RenderMode::AppKitTransparent => "appkit-transparent",
             RenderMode::VisibleWindow => "visible-window",
             #[cfg(not(any(gtk_platform, windows, target_os = "macos")))]
             RenderMode::Unhandled => "unhandled-platform",
@@ -436,33 +454,37 @@ fn render_hidden(window: &tauri::WebviewWindow) -> Result<RenderMode, Box<dyn st
     Ok(RenderMode::Webview2Hidden)
 }
 
-/// Park the export window offscreen and stop AppKit calling it occluded.
+/// Render on macOS without anything reaching the user's eye.
 ///
 /// macOS is the one platform that cannot be given a hidden or detached surface.
 /// A `WKWebView` in a window that was never ordered in is not merely invisible,
 /// it is *suspended*: AppKit reports the window as occluded, WebKit drops the
 /// web content process out of its visible activity state, and the print then
 /// waits forever for pages that are never drawn. That is not a prediction — it
-/// is how the previous offscreen attempt presented, and why `configure_export_window`
-/// used to leave the window centred and visible on macOS alone.
-/// `NSPrintOperation` also insists on a real `NSWindow` to attach its (
-/// suppressed) sheet to, so `-[WKWebView window]` has to keep returning one.
+/// is how the earlier offscreen attempt presented, and why macOS used to be
+/// left with a centred, visible window. `NSPrintOperation` also insists on a
+/// real `NSWindow` for its (suppressed) sheet, so `-[WKWebView window]` has to
+/// keep returning one.
 ///
-/// The way out is to take away the signal rather than the window.
-/// `-[NSApplication _setWindowOcclusionDetectionEnabled:]` with `NO` makes
-/// `-[NSWindow occlusionState]` report every window visible, so moving this one
-/// off every display no longer suspends it. It is private API, which is why it
-/// is probed with `respondsToSelector:` first and why failure is not fatal: with
-/// no way to switch occlusion detection off, the window stays where
-/// `tauri.conf.json` would centre it and is simply visible for the few seconds a
-/// render takes — the old behaviour, which works.
+/// So the window is always ordered in, and the question is only how to stop
+/// anyone seeing it. Two answers, tried in order:
 ///
-/// The window is borderless before it is moved, deliberately. AppKit constrains
-/// a *titled* window's frame to keep its title bar reachable, so the move to
-/// (-10000, -10000) would be clamped back onto the screen; a borderless window
-/// is not constrained.
+/// 1. **Switch occlusion detection off** and move the window off every display.
+///    `-[NSApplication _setWindowOcclusionDetectionEnabled:]` with `NO` makes
+///    `-[NSWindow occlusionState]` report every window visible, so the move no
+///    longer suspends anything. Private API, probed with `respondsToSelector:`.
+///    It is **not present on the GitHub `macos-latest` image** — the first CI
+///    run of this code reported the fallback — so in practice this is the path
+///    for older systems, and step 2 is what usually runs.
+/// 2. **Make it transparent** and leave it where it is. A window on screen is
+///    not occluded whatever its alpha, so the renderer keeps running; at
+///    [`GHOST_ALPHA`] there is nothing to see. Public API, no version
+///    assumptions. Mouse events are passed through so a stray click during a
+///    render lands on whatever is actually underneath.
 ///
-/// **Unverified.** No macOS machine was available. CI has to prove it.
+/// The window is made borderless before either. AppKit constrains a *titled*
+/// window's frame to keep its title bar reachable, so the move in step 1 would
+/// be clamped back onto a screen; a borderless window is not constrained.
 #[cfg(target_os = "macos")]
 fn render_unoccluded(
     window: &tauri::WebviewWindow,
@@ -470,36 +492,54 @@ fn render_unoccluded(
     window.set_decorations(false)?;
     window.set_size(LogicalSize::new(EXPORT_WIDTH, EXPORT_HEIGHT))?;
 
-    let unoccluded = disable_occlusion_detection();
-    if unoccluded {
+    let mode = if disable_occlusion_detection() {
         window.set_position(LogicalPosition::new(OFFSCREEN, OFFSCREEN))?;
-    } else {
-        eprintln!(
-            "slideflare: this macOS cannot switch off window occlusion detection, so the \
-             render window will be visible for the render"
-        );
-    }
-
-    // Ordered in either way. See the doc comment: a window that is not on screen
-    // at all suspends the web content process, offscreen or not.
-    window.show()?;
-
-    // Without the occlusion switch this is the old behaviour under a different
-    // name, so it reports itself as such rather than claiming a win CI would
-    // then accept.
-    Ok(if unoccluded {
         RenderMode::AppKitUnoccluded
     } else {
-        RenderMode::VisibleWindow
-    })
+        // Stays where `tauri.conf.json` centres it: off every display it would
+        // be occluded again, whatever its alpha.
+        make_transparent(window)?;
+        RenderMode::AppKitTransparent
+    };
+
+    // Ordered in either way. See the doc comment: a window that is not on
+    // screen at all suspends the web content process.
+    window.show()?;
+
+    Ok(mode)
+}
+
+/// Draw the export window at an alpha nobody can see, and let clicks through.
+#[cfg(target_os = "macos")]
+fn make_transparent(window: &tauri::WebviewWindow) -> Result<(), Box<dyn std::error::Error>> {
+    use objc2_app_kit::NSWindow;
+
+    let ptr = window.ns_window()?;
+    if ptr.is_null() {
+        return Err("the export window has no NSWindow to make transparent".into());
+    }
+
+    // SAFETY: `ns_window` hands back the `NSWindow` Tauri created for this
+    // window, and `setup` runs on the main thread, which is where AppKit
+    // requires these to be called.
+    let ns_window: &NSWindow = unsafe { &*ptr.cast::<NSWindow>() };
+    ns_window.setAlphaValue(GHOST_ALPHA);
+    ns_window.setIgnoresMouseEvents(true);
+
+    Ok(())
 }
 
 /// Ask AppKit to stop reporting windows as occluded. `false` if it would not.
 ///
 /// Guarded by `respondsToSelector:` because the selector is private: it has been
-/// there since 10.9 and is what every offscreen-rendering macOS app leans on,
-/// but nothing promises the next release keeps it, and an unrecognised selector
-/// is a crash rather than an error.
+/// there since 10.9 and is what every offscreen-rendering macOS app leaned on,
+/// but nothing promised the next release would keep it, and an unrecognised
+/// selector is a crash rather than an error.
+///
+/// It is in fact **gone on the GitHub `macos-latest` image** — the first CI run
+/// of this code took the fallback — so `render_unoccluded` does not depend on
+/// it. Kept because it is strictly better where it exists: an offscreen window
+/// costs no compositing at all, where a transparent one is still drawn.
 #[cfg(target_os = "macos")]
 fn disable_occlusion_detection() -> bool {
     use objc2::runtime::{Bool, Sel};
