@@ -520,11 +520,14 @@ fn make_transparent(window: &tauri::WebviewWindow) -> Result<(), Box<dyn std::er
     }
 
     // SAFETY: `ns_window` hands back the `NSWindow` Tauri created for this
-    // window, and `setup` runs on the main thread, which is where AppKit
-    // requires these to be called.
-    let ns_window: &NSWindow = unsafe { &*ptr.cast::<NSWindow>() };
-    ns_window.setAlphaValue(GHOST_ALPHA);
-    ns_window.setIgnoresMouseEvents(true);
+    // window, checked non-null above, so the reference is valid and unaliased
+    // for this scope. `setup` runs on the main thread, which is where AppKit
+    // requires both setters to be called.
+    unsafe {
+        let ns_window: &NSWindow = &*ptr.cast::<NSWindow>();
+        ns_window.setAlphaValue(GHOST_ALPHA);
+        ns_window.setIgnoresMouseEvents(true);
+    }
 
     Ok(())
 }
