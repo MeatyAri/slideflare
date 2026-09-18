@@ -1,18 +1,24 @@
 # Headless export — what is possible, and what landed
 
-Status: all three platforms are implemented; **only Linux/BSD is verified.**
+Status: **all three platforms land the windowless render, and CI proves it.**
 
 - **Linux/BSD** — landed and measured pixel-for-pixel against `main` (7c4255c).
-- **Windows** — landed and **green on CI's first run**: `webview2-hidden`, with
-  the windowless render pixel-identical to the windowed one on the same runner.
-  Never run on a desktop, only on `windows-latest`.
-- **macOS** — landed as `appkit-transparent`, after CI disproved the original
-  plan. See below: the private occlusion-detection selector everything was
-  supposed to hinge on does not exist on `macos-latest`.
+  | runner | mode taken | vs the windowed reference |
+  | --- | --- | --- |
+  | `ubuntu-22.04` | `gtk-offscreen` | 12/12 pages identical @150dpi |
+  | `windows-latest` | `webview2-hidden` | 12/12 pages identical @150dpi |
+  | `macos-latest` | `appkit-transparent` | 12/12 pages identical @150dpi |
 
-Neither Windows nor macOS has been built here — no MSVC toolchain, no macOS SDK,
-no cross C compiler, so `cargo check --target` dies in a build script for both.
-CI is the only thing that has executed either.
+Linux is additionally measured against a binary built from `main` — see
+"Verification" — which is the stronger claim, since CI can only compare this
+build against itself.
+
+Neither Windows nor macOS has been built on this machine, let alone run: no MSVC
+toolchain, no macOS SDK, no cross C compiler, so `cargo check --target` dies in a
+build script for both. CI is the only thing that has ever executed either, and
+the runners are not desktops. What CI does establish is that each platform takes
+the path intended for it rather than the fallback, and that the deck it produces
+is pixel-for-pixel what the same machine produces with a real window.
 
 Everything under "Evidence" was measured on one machine: Arch, Wayland session,
 WebKitGTK 2.52.5, GTK 3.24.52, GTK 4.22.4.
@@ -217,7 +223,8 @@ Two answers, tried in order:
 
 **CI settled which one runs.** Option 1 was the whole plan; the first run
 reported the fallback instead, because `_setWindowOcclusionDetectionEnabled:` is
-**not present on the GitHub `macos-latest` image**. The selector had been there
+**not present on the GitHub `macos-latest` image**. Option 2 then passed, which
+is where `appkit-transparent` comes from. The selector had been there
 since 10.9 and is what offscreen-rendering macOS apps have leaned on for a
 decade, which is exactly why it was worth a `respondsToSelector:` guard rather
 than a bare call — a bare call would have been a crash, and a doc claiming it
@@ -349,10 +356,6 @@ video source does not resolve, so both modes collapse it identically. Tracked in
 
 ## Still to do
 
-- **Watch macOS go green.** Windows passed on the first run. macOS took the
-  transparent path only after CI rejected the original one, and has not yet been
-  through a full pass. The gate cannot be satisfied by a fallback, so green
-  means the intended path ran.
 - **Revisit the macOS window once there is a Mac to test on.** A transparent
   window is a compromise: it is still composited, and it is still a window on
   the user's screen for the couple of seconds a render takes. Whether anything

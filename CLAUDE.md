@@ -126,7 +126,8 @@ Three things that will bite:
   occluded too). A display server is still required on Linux —
   `gtk_init` fails without one.
   **Windows and macOS have only ever run on CI**, never on a desktop, and cannot
-  even be compiled here. The
+  even be compiled here — all three runners are green, each on its intended path
+  (`gtk-offscreen`, `webview2-hidden`, `appkit-transparent`). The
   fidelity gate in `.github/workflows/ci.yml` is what has to prove them. It
   renders the deck twice, once with `SLIDEFLARE_EXPORT_WINDOW=visible` (also the
   user-facing escape hatch back to a real window), and requires identical pixels

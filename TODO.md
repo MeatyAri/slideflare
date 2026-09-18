@@ -46,13 +46,11 @@
   - [x] fidelity gate in `export-smoke`: render `examples/intro-to-slideflare.md`
         twice on the same runner, once with `SLIDEFLARE_EXPORT_WINDOW=visible`,
         and require identical pixels via `scripts/pdf-pixel-diff.py`
-  - [x] Windows: green on CI's first run — `webview2-hidden`, pixel-identical to
-        the windowed render on the same runner
-  - [ ] **watch macOS go green.** It reported the fallback on the first run,
-        which is how the missing occlusion selector was found; the transparent
-        path is the answer to that and has not been through a full pass yet.
-        Neither platform can be built here (no MSVC toolchain, no macOS SDK), so
-        CI is the only thing that has ever executed either.
+  - [x] all three runners green, each on its intended path rather than the
+        fallback: `gtk-offscreen`, `webview2-hidden`, `appkit-transparent`, and
+        12/12 pages identical to the windowed render in every case. Neither
+        Windows nor macOS can be built here (no MSVC toolchain, no macOS SDK),
+        so CI remains the only thing that has ever executed either.
   - [ ] revisit the macOS window once there is a Mac to test on. A transparent
         window is a compromise — still composited, still a window on the user's
         screen for the couple of seconds a render takes. Whether current macOS
