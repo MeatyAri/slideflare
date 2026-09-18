@@ -274,15 +274,50 @@ jobs:
           set -euo pipefail
 
           case "${{ matrix.platform }}" in
-            ubuntu-22.04) run() { xvfb-run -a target/release/slideflare "$@"; } ;;
-            windows-latest) run() { target/release/slideflare.exe "$@"; } ;;
-            *) run() { target/release/slideflare "$@"; } ;;
+            ubuntu-22.04)
+              run() { xvfb-run -a target/release/slideflare "$@"; }
+              expected=gtk-offscreen
+              ;;
+            windows-latest)
+              run() { target/release/slideflare.exe "$@"; }
+              expected=webview2-hidden
+              ;;
+            *)
+              run() { target/release/slideflare "$@"; }
+              expected=appkit-unoccluded
+              ;;
           esac
 
-          run export pdf ../examples/intro-to-slideflare.md -o fidelity-windowless.pdf
+          run export pdf ../examples/intro-to-slideflare.md \
+            -o fidelity-windowless.pdf 2> windowless.log
 
           export SLIDEFLARE_EXPORT_WINDOW=visible
-          run export pdf ../examples/intro-to-slideflare.md -o fidelity-windowed.pdf
+          run export pdf ../examples/intro-to-slideflare.md \
+            -o fidelity-windowed.pdf 2> windowed.log
+          unset SLIDEFLARE_EXPORT_WINDOW
+
+          # Every windowless path here falls back to the old visible window if
+          # the platform will not cooperate, and a fallback that engaged
+          # silently would make the comparison below worthless: both sides
+          # would be the *same* windowed render, agreeing perfectly and proving
+          # nothing. So the mode each run reports has to be the one intended.
+          mode() { sed -n 's/^slideflare: export render mode: //p' "$1" | tail -1; }
+
+          windowless=$(mode windowless.log)
+          windowed=$(mode windowed.log)
+          echo "windowless=$windowless windowed=$windowed expected=$expected"
+
+          [ "$windowless" = "$expected" ] || {
+            echo "::error::the windowless render fell back to '$windowless'," \
+                 "so nothing below tests $expected"
+            cat windowless.log
+            exit 1
+          }
+          [ "$windowed" = "visible-window" ] || {
+            echo "::error::the reference render reported '$windowed', not a real window"
+            cat windowed.log
+            exit 1
+          }
 
       - name: Check the windowless render is pixel-identical
         working-directory: src-tauri
@@ -298,7 +333,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fidelity-diff-${{ matrix.platform }}
-          path: src-tauri/fidelity-diff
+          path: |
+            src-tauri/fidelity-diff
+            src-tauri/windowless.log
+            src-tauri/windowed.log
           if-no-files-found: ignore
 
       # Kept so a failure can be inspected rather than only read about.

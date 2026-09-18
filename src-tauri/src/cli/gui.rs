@@ -78,6 +78,62 @@ const OFFSCREEN: f64 = -10_000.0;
 ///   by hand.
 const WINDOW_MODE_VAR: &str = "SLIDEFLARE_EXPORT_WINDOW";
 
+/// Prefix of the line naming which render path was taken.
+///
+/// Printed on every export, and asserted by `export-smoke` in
+/// `.github/workflows/ci.yml`. It exists because every windowless path here has
+/// a fallback to the old visible window, and a fallback that engages silently
+/// would make the fidelity gate meaningless: both sides of the comparison would
+/// be the *same* windowed render, agreeing perfectly while proving nothing. CI
+/// therefore requires the exact mode it expects, per platform, rather than
+/// merely requiring the two renders to match.
+const RENDER_MODE_PREFIX: &str = "slideflare: export render mode: ";
+
+/// Which arrangement the export ended up rendering into.
+///
+/// Reported rather than returned because the interesting readers are a CI
+/// assertion and a user debugging a bad PDF, not other code.
+///
+/// Each variant is `cfg`-gated to the platform that can produce it, so a
+/// variant going unused is a compile error rather than something to notice
+/// later.
+#[derive(Clone, Copy)]
+enum RenderMode {
+    /// GTK: no window at all, webview reparented into a `GtkOffscreenWindow`.
+    #[cfg(gtk_platform)]
+    GtkOffscreen,
+    /// Windows: HWND never shown, WebView2 controller forced visible.
+    #[cfg(windows)]
+    Webview2Hidden,
+    /// macOS: window ordered in but borderless, offscreen, occlusion detection
+    /// disabled.
+    #[cfg(target_os = "macos")]
+    AppKitUnoccluded,
+    /// The old realized window. Either asked for with `SLIDEFLARE_EXPORT_WINDOW`
+    /// or fallen back to — see `RENDER_MODE_PREFIX` for why CI cares which.
+    VisibleWindow,
+    /// A platform with none of the above. Window hidden, engine trusted.
+    #[cfg(not(any(gtk_platform, windows, target_os = "macos")))]
+    Unhandled,
+}
+
+impl RenderMode {
+    /// The token CI matches on. Stable: changing one breaks the workflow.
+    fn token(self) -> &'static str {
+        match self {
+            #[cfg(gtk_platform)]
+            RenderMode::GtkOffscreen => "gtk-offscreen",
+            #[cfg(windows)]
+            RenderMode::Webview2Hidden => "webview2-hidden",
+            #[cfg(target_os = "macos")]
+            RenderMode::AppKitUnoccluded => "appkit-unoccluded",
+            RenderMode::VisibleWindow => "visible-window",
+            #[cfg(not(any(gtk_platform, windows, target_os = "macos")))]
+            RenderMode::Unhandled => "unhandled-platform",
+        }
+    }
+}
+
 /// Window size for export mode, in CSS pixels.
 ///
 /// Matches `DESIGN_W`/`DESIGN_H` in `src/routes/view-slides/shared.svelte.ts`.
@@ -201,7 +257,7 @@ fn configure_export_window(app: &mut tauri::App) -> Result<(), Box<dyn std::erro
         .expect("the main window is declared in tauri.conf.json");
 
     if window_mode_is_visible() {
-        return render_in_a_window(&window);
+        return render_in_a_window(&window).map(report_mode);
     }
 
     #[cfg(gtk_platform)]
@@ -217,9 +273,21 @@ fn configure_export_window(app: &mut tauri::App) -> Result<(), Box<dyn std::erro
     // than the three above. `export::pdf_unsupported` refuses PDF here anyway,
     // and HTML export never touches layout.
     #[cfg(not(any(gtk_platform, windows, target_os = "macos")))]
-    let placed = window.hide().map_err(Into::into);
+    let placed = window
+        .hide()
+        .map(|()| RenderMode::Unhandled)
+        .map_err(Into::into);
 
-    placed
+    placed.map(report_mode)
+}
+
+/// Say which path was taken, on stderr, before anything can hang or mis-render.
+///
+/// stderr rather than stdout because stdout carries the output path and nothing
+/// else — `out=$(slideflare export ...)` has to keep working.
+fn report_mode(mode: RenderMode) {
+    eprintln!("{RENDER_MODE_PREFIX}{}", mode.token());
+    let _ = std::io::stderr().flush();
 }
 
 /// Whether the caller asked for the old, visible-window render.
@@ -242,7 +310,9 @@ fn window_mode_is_visible() -> bool {
 ///
 /// Kept, rather than deleted along with the paths that replaced it, for the two
 /// reasons on [`WINDOW_MODE_VAR`].
-fn render_in_a_window(window: &tauri::WebviewWindow) -> Result<(), Box<dyn std::error::Error>> {
+fn render_in_a_window(
+    window: &tauri::WebviewWindow,
+) -> Result<RenderMode, Box<dyn std::error::Error>> {
     window.set_decorations(false)?;
     window.set_size(LogicalSize::new(EXPORT_WIDTH, EXPORT_HEIGHT))?;
 
@@ -254,7 +324,7 @@ fn render_in_a_window(window: &tauri::WebviewWindow) -> Result<(), Box<dyn std::
 
     window.show()?;
 
-    Ok(())
+    Ok(RenderMode::VisibleWindow)
 }
 
 /// Move the export webview out of its toplevel and into an offscreen window.
@@ -276,7 +346,9 @@ fn render_in_a_window(window: &tauri::WebviewWindow) -> Result<(), Box<dyn std::
 /// Wayland compositors ignore, leaving the window plainly visible for the whole
 /// render.
 #[cfg(gtk_platform)]
-fn render_offscreen(window: &tauri::WebviewWindow) -> Result<(), Box<dyn std::error::Error>> {
+fn render_offscreen(
+    window: &tauri::WebviewWindow,
+) -> Result<RenderMode, Box<dyn std::error::Error>> {
     use gtk::prelude::*;
 
     // The toplevel tao insists on creating stays, unmapped and now empty:
@@ -304,7 +376,7 @@ fn render_offscreen(window: &tauri::WebviewWindow) -> Result<(), Box<dyn std::er
         EXPORT_CONTAINER.with(|slot| *slot.borrow_mut() = Some(offscreen));
     })?;
 
-    Ok(())
+    Ok(RenderMode::GtkOffscreen)
 }
 
 /// Keep the export window hidden and tell WebView2 to render into it anyway.
@@ -329,7 +401,7 @@ fn render_offscreen(window: &tauri::WebviewWindow) -> Result<(), Box<dyn std::er
 /// the call fails, the previous shape — a realized, undecorated window parked
 /// far offscreen — is restored rather than risking a silent mis-render.
 #[cfg(windows)]
-fn render_hidden(window: &tauri::WebviewWindow) -> Result<(), Box<dyn std::error::Error>> {
+fn render_hidden(window: &tauri::WebviewWindow) -> Result<RenderMode, Box<dyn std::error::Error>> {
     use std::sync::Arc;
 
     // Sized even though it is never mapped: the WebView2 controller's bounds
@@ -361,7 +433,7 @@ fn render_hidden(window: &tauri::WebviewWindow) -> Result<(), Box<dyn std::error
         return render_in_a_window(window);
     }
 
-    Ok(())
+    Ok(RenderMode::Webview2Hidden)
 }
 
 /// Park the export window offscreen and stop AppKit calling it occluded.
@@ -392,16 +464,19 @@ fn render_hidden(window: &tauri::WebviewWindow) -> Result<(), Box<dyn std::error
 ///
 /// **Unverified.** No macOS machine was available. CI has to prove it.
 #[cfg(target_os = "macos")]
-fn render_unoccluded(window: &tauri::WebviewWindow) -> Result<(), Box<dyn std::error::Error>> {
+fn render_unoccluded(
+    window: &tauri::WebviewWindow,
+) -> Result<RenderMode, Box<dyn std::error::Error>> {
     window.set_decorations(false)?;
     window.set_size(LogicalSize::new(EXPORT_WIDTH, EXPORT_HEIGHT))?;
 
-    if disable_occlusion_detection() {
+    let unoccluded = disable_occlusion_detection();
+    if unoccluded {
         window.set_position(LogicalPosition::new(OFFSCREEN, OFFSCREEN))?;
     } else {
         eprintln!(
             "slideflare: this macOS cannot switch off window occlusion detection, so the \
-             render window will be briefly visible"
+             render window will be visible for the render"
         );
     }
 
@@ -409,7 +484,14 @@ fn render_unoccluded(window: &tauri::WebviewWindow) -> Result<(), Box<dyn std::e
     // at all suspends the web content process, offscreen or not.
     window.show()?;
 
-    Ok(())
+    // Without the occlusion switch this is the old behaviour under a different
+    // name, so it reports itself as such rather than claiming a win CI would
+    // then accept.
+    Ok(if unoccluded {
+        RenderMode::AppKitUnoccluded
+    } else {
+        RenderMode::VisibleWindow
+    })
 }
 
 /// Ask AppKit to stop reporting windows as occluded. `false` if it would not.

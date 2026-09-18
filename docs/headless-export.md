@@ -281,6 +281,30 @@ committed PNG could not be, because text rasterizes differently on every platfor
 and on any two runner images. On failure the first differing page is uploaded as
 an artifact.
 
+**That comparison alone would be worthless**, and this is the part worth reading
+twice. Every windowless path falls back to the old visible window when the
+platform will not cooperate — Windows if `SetIsVisible` fails, macOS if the
+occlusion selector is missing. A fallback that engaged silently would leave both
+sides of the comparison as the _same_ windowed render: identical pixels, perfect
+agreement, nothing tested. So every export prints the path it actually took:
+
+```
+slideflare: export render mode: gtk-offscreen
+```
+
+and CI requires the exact token for the platform it is on — `gtk-offscreen`,
+`webview2-hidden` or `appkit-unoccluded` for the windowless run, `visible-window`
+for the reference — before it compares anything. A fallback now fails the job
+instead of passing it quietly. The negative case was exercised by forcing the
+fallback locally: the step fails with
+`the windowless render fell back to 'visible-window'` while the two PDFs are
+byte-for-byte the same.
+
+macOS reports `visible-window` rather than `appkit-unoccluded` when
+`respondsToSelector:` says the occlusion switch is gone, because without it the
+path _is_ the old behaviour under a new name, and CI should not accept it as a
+win.
+
 `scripts/pdf-pixel-diff.py` uses `pypdfium2` and `pillow` — pip wheels with the
 renderer inside them, so setup is the same two lines on all three runners, which
 `pdftoppm` and `magick` would not be.
@@ -309,7 +333,8 @@ video source does not resolve, so both modes collapse it identically. Tracked in
 
 - **Watch the first green run of the fidelity gate on Windows and macOS.** Until
   then the two paths are untested code, and the sentences above describing what
-  WebView2 and AppKit do are citations, not measurements.
+  WebView2 and AppKit do are citations, not measurements. The gate cannot be
+  passed by a fallback, so green means the intended path ran.
 - **Render `<video>` in the windowless GTK export**, or decide deliberately that
   a printed deck shows a poster frame and make that explicit rather than
   emergent.

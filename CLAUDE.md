@@ -123,10 +123,14 @@ Three things that will bite:
   (`render_unoccluded`). A display server is still required on Linux —
   `gtk_init` fails without one.
   **Only the GTK path has ever been run.** Windows and macOS are unverified; the
-  fidelity gate in `.github/workflows/ci.yml` — render twice, once with
-  `SLIDEFLARE_EXPORT_WINDOW=visible`, and require identical pixels — is what has
-  to prove them. That variable is also the user-facing escape hatch back to a
-  real window. See `docs/headless-export.md`.
+  fidelity gate in `.github/workflows/ci.yml` is what has to prove them. It
+  renders the deck twice, once with `SLIDEFLARE_EXPORT_WINDOW=visible` (also the
+  user-facing escape hatch back to a real window), and requires identical pixels
+  — but first it requires each run to _report_ the path it took, because all
+  three windowless paths fall back to that same visible window and a silent
+  fallback would make both sides of the comparison the same render. Every export
+  prints `slideflare: export render mode: <token>`; keep those tokens stable,
+  CI matches on them. See `docs/headless-export.md`.
 - **`tauri::generate_context!` may be expanded only once in the crate.** Every
   expansion emits an `_EMBED_INFO_PLIST` symbol, and a second one fails the macOS
   link — invisible on Linux and Windows, so CI is what tells you. `run_app` holds
