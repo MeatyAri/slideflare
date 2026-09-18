@@ -122,6 +122,14 @@
   const POLL_INTERVAL_MS = 50;
   /** Cap on how long `nextFrames` will wait for frames that may never come. */
   const FRAME_WAIT_CAP_MS = 1000;
+  /**
+   * Cap on how long readiness will wait for images to settle.
+   *
+   * A deck may reference a file that is missing, or a remote image on a machine
+   * with no network. Neither should turn an export into a timeout, so a slide
+   * that never settles is rendered as it stands rather than waited on forever.
+   */
+  const MEDIA_WAIT_CAP_MS = 10_000;
 
   /**
    * Wait for layout to settle, not merely for Svelte to have updated.
@@ -179,6 +187,45 @@
   }
 
   /**
+   * Resolve once every image on the page has a final layout box.
+   *
+   * This is the one thing the deck's own measurement cannot infer. A slide
+   * reports its natural height as soon as its elements exist, but an `<img>`
+   * with no intrinsic size yet occupies nothing, so a deck measured before its
+   * images have decoded measures short — and because one `fitScale` is derived
+   * for the whole document from the tallest slide, every slide then prints
+   * over-sized and clipped, at exit code 0.
+   *
+   * It matters most where the render surface is not on any screen. Engines
+   * deprioritise or outright suspend image decoding for content they consider
+   * hidden, which is exactly what CLI export asks them to render into; each
+   * platform has its own arrangement to keep the content nominally visible (see
+   * `cli::gui`), and this is the safety net under all three.
+   *
+   * Video is deliberately *not* waited on. `<video>` has no `decode()`, and the
+   * nearest equivalent — `loadedmetadata`, which is what fixes `videoWidth` and
+   * so the element's height — does not arrive at all in a WebKitGTK offscreen
+   * window, so waiting on it only adds the cap to every export with a video in
+   * it. A video that has not reported metadata by print time is laid out
+   * collapsed, which is how every platform already behaves today; see the
+   * entry in `TODO.md`.
+   *
+   * Failures resolve rather than reject. A broken image is a deck the user
+   * should still get, with a broken image on it.
+   */
+  function mediaSettled(): Promise<void> {
+    // `decode()` resolves only once the bitmap is ready to paint, which is
+    // strictly later than `complete` and is the point the layout box is final.
+    // Already-decoded images resolve immediately.
+    const waits = Array.from(document.images, (image) => image.decode().catch(() => undefined));
+    if (waits.length === 0) return Promise.resolve();
+
+    const settled = Promise.all(waits).then(() => undefined);
+    const capped = new Promise<void>((resolve) => setTimeout(resolve, MEDIA_WAIT_CAP_MS));
+    return Promise.race([settled, capped]);
+  }
+
+  /**
    * Wait until the deck is genuinely ready to be rendered to paper.
    *
    * PDF export prints the live, realized webview precisely because layout, font
@@ -189,9 +236,14 @@
    *     the deck merely being non-empty.
    *  2. every slide has reported its natural height, meaning each one has been
    *     laid out and measured, and `fitScale` is derived from a complete set.
-   *  3. fonts have resolved — text measured against a fallback face reflows once
+   *  3. images and video have settled, so nothing is still occupying zero
+   *     height when it is measured — see `mediaSettled`.
+   *  4. fonts have resolved — text measured against a fallback face reflows once
    *     the real one arrives, which on paper shows up as clipped or shifted text.
-   *  4. two frames have passed, so the scale derived from (2) has actually been
+   *  5. every slide has reported its height *again*, because (3) and (4) both
+   *     reflow the slides they settle, and the measurement taken in (2) is
+   *     stale the moment they do.
+   *  6. two frames have passed, so the scale derived from (5) has actually been
    *     applied rather than merely computed.
    */
   async function waitForDeckReady(timeoutMs: number): Promise<void> {
@@ -207,10 +259,45 @@
       timeoutMs
     );
 
+    await mediaSettled();
+
     // Not every engine implements the font loading API; where it is missing,
     // there is nothing to wait for.
     await document.fonts?.ready;
+
+    // Both of the above reflow content, and a ResizeObserver reports the new
+    // height on a later task. Wait for the measurements to stop moving rather
+    // than assuming they already have.
+    await measurementsStable(timeoutMs);
+
     await nextFrames();
+  }
+
+  /**
+   * Resolve once two consecutive polls see identical slide heights.
+   *
+   * Cheaper and more honest than guessing a fixed delay: the thing that must be
+   * true before printing is that `fitScale` is derived from measurements that
+   * are not about to change, and that is exactly what this tests.
+   */
+  async function measurementsStable(timeoutMs: number): Promise<void> {
+    const snapshot = () =>
+      Object.keys(heights)
+        .sort()
+        .map((key) => `${key}:${heights[Number(key)]}`)
+        .join(',');
+
+    let previous: string | null = null;
+    await until(
+      () => {
+        const current = snapshot();
+        const stable = previous === current;
+        previous = current;
+        return stable;
+      },
+      'slide measurements to stop changing',
+      timeoutMs
+    );
   }
 
   /**

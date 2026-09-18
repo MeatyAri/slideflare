@@ -35,11 +35,32 @@ const EVENT_PDF_FAILED = 'pdf-export-failed';
  */
 const PDF_TIMEOUT_MS = 120_000;
 
-/** Wait for layout to actually settle, not merely for Svelte to have updated. */
+/**
+ * Cap on how long `nextFrames` will wait for frames that may never come.
+ *
+ * Mirrors the cap on the readiness check's own copy in
+ * `src/routes/view-slides/+page.svelte`, and for the same reason.
+ */
+const FRAME_WAIT_CAP_MS = 1000;
+
+/**
+ * Wait for layout to actually settle, not merely for Svelte to have updated.
+ *
+ * Capped with a timer because CLI export renders into a surface no compositor
+ * is showing — an offscreen GTK window, a hidden HWND, a window parked past the
+ * edge of every display — and an engine is free to stop delivering animation
+ * frames to any of them. Two frames is what we want, but never at the cost of
+ * hanging until the watchdog fires.
+ */
 function nextFrames(): Promise<void> {
-  return new Promise((resolve) =>
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-  );
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(cap);
+      resolve();
+    };
+    const cap = setTimeout(done, FRAME_WAIT_CAP_MS);
+    requestAnimationFrame(() => requestAnimationFrame(done));
+  });
 }
 
 function baseName(filePath: string): string {

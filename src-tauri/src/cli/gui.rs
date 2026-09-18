@@ -3,21 +3,38 @@
 //! Both modes build the *same* app — same plugins, same commands, same
 //! frontend. Export mode differs in exactly two ways, and both are deliberate:
 //!
-//! 1. The window is moved offscreen and stripped of decorations rather than
-//!    being hidden. `docs/testing-platform-exports.md` is explicit that hiding
-//!    it is the risky choice: PDF export prints the *live, realized* webview
-//!    because layout, font resolution, and MathML measurement are settled there,
-//!    and on GTK an unmapped window may never realize at all. Offscreen keeps it
-//!    realized while keeping it out of the user's face.
+//! 1. The deck is rendered where nobody can see it. The main window is declared
+//!    `"visible": false` in `tauri.conf.json` and shown explicitly in
+//!    presentation mode, so export mode never shows it at all — not even for the
+//!    frame it would take to move or hide it again.
 //!
-//!    Positioning is best-effort, and skipped entirely on macOS. Wayland has no
-//!    notion of global window coordinates, so compositors there ignore the move
-//!    and the window is simply visible for the duration of the render — cosmetic
-//!    rather than harmful, and irrelevant to CI, which runs under `xvfb`, an X
-//!    server, where the move works. macOS is worse than cosmetic: AppKit treats
-//!    a fully offscreen window as occluded and WebKit then suspends rendering,
-//!    so the print waits forever for pages that never come. See
-//!    `configure_export_window`.
+//!    Where the three webviews differ is in what they *do* with a window nobody
+//!    is looking at, and the answer decides everything. None of them will lay
+//!    content out properly in a surface the engine considers hidden: replaced
+//!    elements never settle their layout box, so the deck measures short, one
+//!    `fitScale` is derived for the whole document from those short
+//!    measurements, and every slide prints over-sized and clipped — at exit code
+//!    0. Printing itself needs nothing; WebKitGTK prints correct paginated PDF
+//!    from a webview that was never even realized. It is always the measurement
+//!    that breaks. So each platform gets whatever makes the engine call the
+//!    content visible while the desktop shows nothing:
+//!
+//!    - GTK (`render_offscreen`): no window at all. The webview is reparented
+//!      into a `GtkOffscreenWindow`, which is a normal visible 1280x720 page as
+//!      far as WebKit is concerned and is never mapped on the compositor.
+//!      A display server is still required — `gtk_init` fails without one.
+//!    - Windows (`render_hidden`): the HWND stays hidden and
+//!      `ICoreWebView2Controller::SetIsVisible(true)` keeps the renderer
+//!      running inside it, because WebView2 derives page visibility from that
+//!      property rather than from the window.
+//!    - macOS (`render_unoccluded`): the window has to be ordered in, since
+//!      AppKit calls an un-ordered window occluded and WebKit then suspends
+//!      rendering. It is made borderless, parked far offscreen, and AppKit's
+//!      occlusion detection is switched off so the move does not suspend it
+//!      either.
+//!
+//!    Only the GTK path is verified. See `docs/headless-export.md` for the
+//!    measurements behind it and for what the other two still owe CI.
 //! 2. `AppState` carries a [`CliExportRequest`], which the frontend picks up and
 //!    acts on once the deck reports itself laid out.
 //!
@@ -29,22 +46,111 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use tauri::{LogicalSize, Manager, RunEvent};
-// Only the offscreen move needs this, and that is skipped on macOS.
-#[cfg(not(target_os = "macos"))]
-use tauri::LogicalPosition;
+use tauri::{LogicalPosition, LogicalSize, Manager, RunEvent};
 
 use super::{exit, fail, resolve_deck, resolve_output, ExportArgs};
 use crate::export::CliExportRequest;
 use crate::watcher::AppState;
 
-/// Where the export window is parked.
+/// Where a visible export window is parked.
 ///
 /// Far enough off any plausible desktop to be invisible, while still being a
-/// real mapped window that the compositor and GTK will realize and lay out.
-/// Not used on macOS — see `configure_export_window`.
-#[cfg(not(target_os = "macos"))]
+/// real ordered-in window the compositor will lay out. Used by the macOS
+/// windowless path, which has to keep its window on the screen list, and by the
+/// `SLIDEFLARE_EXPORT_WINDOW=visible` fallback everywhere else.
 const OFFSCREEN: f64 = -10_000.0;
+
+/// How visible the macOS export window is when it cannot be moved offscreen.
+///
+/// Not zero, deliberately. AppKit's occlusion detection treats a fully
+/// transparent window as not visible, which would put us back where we started
+/// — the web content process suspended and the print waiting for pages that
+/// never come. This is the smallest value that is still, formally, drawn.
+/// Against any background it is invisible; at 1280x720 for the couple of
+/// seconds a render takes, nothing is perceptible.
+#[cfg(target_os = "macos")]
+const GHOST_ALPHA: f64 = 0.004;
+
+/// Environment variable that puts the export back in a real window.
+///
+/// Two jobs, both load-bearing:
+///
+/// - It is the escape hatch. The windowless paths lean on how each engine
+///   decides a surface is visible, which is not contract anywhere, and a runtime
+///   that gets it wrong produces a *plausible* PDF rather than an error. Anyone
+///   hitting that can set this and get the previous behaviour back without
+///   downgrading.
+/// - It is how the fidelity gate in `.github/workflows/ci.yml` has anything to
+///   compare against. The same deck is rendered twice on the same runner, once
+///   each way, and the two are required to rasterize to identical pixels. That
+///   is a reference no committed image can be, because it is generated by the
+///   same fonts and the same engine as the thing under test — which is what
+///   makes the check meaningful on Windows and macOS, where nobody has run this
+///   by hand.
+const WINDOW_MODE_VAR: &str = "SLIDEFLARE_EXPORT_WINDOW";
+
+/// Prefix of the line naming which render path was taken.
+///
+/// Printed on every export, and asserted by `export-smoke` in
+/// `.github/workflows/ci.yml`. It exists because every windowless path here has
+/// a fallback to the old visible window, and a fallback that engages silently
+/// would make the fidelity gate meaningless: both sides of the comparison would
+/// be the *same* windowed render, agreeing perfectly while proving nothing. CI
+/// therefore requires the exact mode it expects, per platform, rather than
+/// merely requiring the two renders to match.
+const RENDER_MODE_PREFIX: &str = "slideflare: export render mode: ";
+
+/// Which arrangement the export ended up rendering into.
+///
+/// Reported rather than returned because the interesting readers are a CI
+/// assertion and a user debugging a bad PDF, not other code.
+///
+/// Each variant is `cfg`-gated to the platform that can produce it, so a
+/// variant going unused is a compile error rather than something to notice
+/// later.
+#[derive(Clone, Copy)]
+enum RenderMode {
+    /// GTK: no window at all, webview reparented into a `GtkOffscreenWindow`.
+    #[cfg(gtk_platform)]
+    GtkOffscreen,
+    /// Windows: HWND never shown, WebView2 controller forced visible.
+    #[cfg(windows)]
+    Webview2Hidden,
+    /// macOS: window ordered in but borderless, offscreen, occlusion detection
+    /// disabled.
+    #[cfg(target_os = "macos")]
+    AppKitUnoccluded,
+    /// macOS, where occlusion detection could not be switched off: the window
+    /// stays on screen, where AppKit will not call it occluded, but is drawn at
+    /// an alpha nobody can see.
+    #[cfg(target_os = "macos")]
+    AppKitTransparent,
+    /// The old realized window. Either asked for with `SLIDEFLARE_EXPORT_WINDOW`
+    /// or fallen back to — see `RENDER_MODE_PREFIX` for why CI cares which.
+    VisibleWindow,
+    /// A platform with none of the above. Window hidden, engine trusted.
+    #[cfg(not(any(gtk_platform, windows, target_os = "macos")))]
+    Unhandled,
+}
+
+impl RenderMode {
+    /// The token CI matches on. Stable: changing one breaks the workflow.
+    fn token(self) -> &'static str {
+        match self {
+            #[cfg(gtk_platform)]
+            RenderMode::GtkOffscreen => "gtk-offscreen",
+            #[cfg(windows)]
+            RenderMode::Webview2Hidden => "webview2-hidden",
+            #[cfg(target_os = "macos")]
+            RenderMode::AppKitUnoccluded => "appkit-unoccluded",
+            #[cfg(target_os = "macos")]
+            RenderMode::AppKitTransparent => "appkit-transparent",
+            RenderMode::VisibleWindow => "visible-window",
+            #[cfg(not(any(gtk_platform, windows, target_os = "macos")))]
+            RenderMode::Unhandled => "unhandled-platform",
+        }
+    }
+}
 
 /// Window size for export mode, in CSS pixels.
 ///
@@ -56,6 +162,19 @@ const EXPORT_HEIGHT: f64 = 720.0;
 
 /// Set once the export outcome has been reported, so the watchdog stays quiet.
 static EXPORT_SETTLED: AtomicBool = AtomicBool::new(false);
+
+#[cfg(gtk_platform)]
+thread_local! {
+    /// Holds the offscreen window the export webview is rendered into.
+    ///
+    /// It owns the webview once [`render_offscreen`] has reparented it, so
+    /// dropping it would destroy the very thing being printed. A thread-local
+    /// rather than Tauri managed state because GTK objects are neither `Send`
+    /// nor `Sync`, and everything that touches it runs on the main thread —
+    /// the same reasoning as `IN_FLIGHT` in `export/pdf_linux.rs`.
+    static EXPORT_CONTAINER: std::cell::RefCell<Option<gtk::OffscreenWindow>> =
+        const { std::cell::RefCell::new(None) };
+}
 
 /// Build the app with every command registered.
 ///
@@ -98,6 +217,14 @@ fn run_app(state: AppState, export_mode: bool) -> i32 {
     let builder = builder().manage(state).setup(move |app| {
         if export_mode {
             configure_export_window(app)?;
+        } else {
+            // The window is declared hidden so export mode can never flash it
+            // onto the desktop, not even for the frame between it being mapped
+            // and being moved or hidden again. Presentation mode therefore has
+            // to ask for it.
+            app.get_webview_window("main")
+                .expect("the main window is declared in tauri.conf.json")
+                .show()?;
         }
         Ok(())
     });
@@ -133,10 +260,13 @@ fn run_app(state: AppState, export_mode: bool) -> i32 {
     fail("export ended without reporting a result")
 }
 
-/// Put the render window where a batch job belongs: realized, but out of sight.
+/// Put the deck where a batch job belongs: out of sight.
+///
+/// Dispatches to the one routine that works on this platform's webview; the
+/// module comment explains why there are three of them rather than one.
 fn configure_export_window(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // No dock icon or app switcher entry for what is a batch job. Must happen
-    // before the window is shown or macOS activates the app.
+    // before the window is ordered in, or macOS activates the app.
     #[cfg(target_os = "macos")]
     app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
@@ -144,31 +274,302 @@ fn configure_export_window(app: &mut tauri::App) -> Result<(), Box<dyn std::erro
         .get_webview_window("main")
         .expect("the main window is declared in tauri.conf.json");
 
-    // Realized but out of sight — see the module comment for why this is not
-    // `set_visible(false)`.
+    if window_mode_is_visible() {
+        return render_in_a_window(&window).map(report_mode);
+    }
+
+    #[cfg(gtk_platform)]
+    let placed = render_offscreen(&window);
+
+    #[cfg(windows)]
+    let placed = render_hidden(&window);
+
+    #[cfg(target_os = "macos")]
+    let placed = render_unoccluded(&window);
+
+    // Nothing to do but leave the window hidden and hope the engine is kinder
+    // than the three above. `export::pdf_unsupported` refuses PDF here anyway,
+    // and HTML export never touches layout.
+    #[cfg(not(any(gtk_platform, windows, target_os = "macos")))]
+    let placed = window
+        .hide()
+        .map(|()| RenderMode::Unhandled)
+        .map_err(Into::into);
+
+    placed.map(report_mode)
+}
+
+/// Say which path was taken, on stderr, before anything can hang or mis-render.
+///
+/// stderr rather than stdout because stdout carries the output path and nothing
+/// else — `out=$(slideflare export ...)` has to keep working.
+fn report_mode(mode: RenderMode) {
+    eprintln!("{RENDER_MODE_PREFIX}{}", mode.token());
+    let _ = std::io::stderr().flush();
+}
+
+/// Whether the caller asked for the old, visible-window render.
+///
+/// Any value but `visible` is ignored rather than rejected: this is a debugging
+/// and CI switch, and an export is the wrong place to fail over a typo in an
+/// environment variable nobody meant to set.
+fn window_mode_is_visible() -> bool {
+    std::env::var(WINDOW_MODE_VAR)
+        .map(|mode| mode.eq_ignore_ascii_case("visible"))
+        .unwrap_or(false)
+}
+
+/// Render in a real window, the way every platform used to.
+///
+/// Undecorated, out of the taskbar, and parked far offscreen — except on macOS,
+/// where the move is what suspends the renderer (see `render_unoccluded`) and
+/// the window therefore stays where `tauri.conf.json` centres it, visible for
+/// the few seconds the render takes.
+///
+/// Kept, rather than deleted along with the paths that replaced it, for the two
+/// reasons on [`WINDOW_MODE_VAR`].
+fn render_in_a_window(
+    window: &tauri::WebviewWindow,
+) -> Result<RenderMode, Box<dyn std::error::Error>> {
     window.set_decorations(false)?;
     window.set_size(LogicalSize::new(EXPORT_WIDTH, EXPORT_HEIGHT))?;
 
-    // Everywhere but macOS, park it far off any plausible desktop.
-    //
-    // macOS is excluded deliberately. AppKit reports a fully offscreen window as
-    // occluded, and WebKit suspends rendering in the web content process for an
-    // occluded WKWebView. The print pipeline then waits forever for pages that
-    // are never drawn, which is exactly how this presented: readiness reached,
-    // then `runOperation` hanging until the watchdog fired. It is the same trap
-    // as the animation frames an unpainted window never delivers — see
-    // `nextFrames` in `src/routes/view-slides/+page.svelte`.
-    //
-    // So on macOS the window stays where `tauri.conf.json` centres it, visible
-    // for the few seconds a render takes. The activation policy above already
-    // keeps it out of the Dock and the app switcher.
     #[cfg(not(target_os = "macos"))]
     {
         window.set_position(LogicalPosition::new(OFFSCREEN, OFFSCREEN))?;
         window.set_skip_taskbar(true)?;
     }
 
+    window.show()?;
+
+    Ok(RenderMode::VisibleWindow)
+}
+
+/// Move the export webview out of its toplevel and into an offscreen window.
+///
+/// WebKitGTK does not need a window to print, and does not even need a realized
+/// widget: an unparented `WebKitWebView` prints correct, paginated, selectable
+/// PDF. What it does need is a container the *engine* considers visible, which
+/// is a different thing. `visibilityState` follows the container, and a webview
+/// the engine calls hidden never settles the layout of its replaced elements —
+/// images in particular. The deck measures its own slides to derive one
+/// `fitScale` for the whole document, so it would measure short and then print
+/// every slide over-sized and clipped, at exit code 0. That was observed, not
+/// theorised; `docs/headless-export.md` has the evidence.
+///
+/// A `GtkOffscreenWindow` satisfies both halves: the web content sees a normal,
+/// visible 1280x720 page and keeps receiving animation frames, while nothing is
+/// ever mapped on the compositor. That makes it strictly better than the
+/// toplevel it replaces, which had to be parked at (-10000, -10000) — a move
+/// Wayland compositors ignore, leaving the window plainly visible for the whole
+/// render.
+#[cfg(gtk_platform)]
+fn render_offscreen(
+    window: &tauri::WebviewWindow,
+) -> Result<RenderMode, Box<dyn std::error::Error>> {
+    use gtk::prelude::*;
+
+    // The toplevel tao insists on creating stays, unmapped and now empty:
+    // Tauri's window bookkeeping and the `RunEvent::Exit` guard in `run_app`
+    // both key off it still existing.
+    window.hide()?;
+
+    window.with_webview(|platform| {
+        let view = platform.inner();
+
+        if let Some(parent) = view.parent() {
+            if let Some(container) = parent.downcast_ref::<gtk::Container>() {
+                container.remove(&view);
+            }
+        }
+
+        let offscreen = gtk::OffscreenWindow::new();
+        offscreen.set_default_size(EXPORT_WIDTH as i32, EXPORT_HEIGHT as i32);
+        offscreen.add(&view);
+        // Realizes and allocates it, which is what gives the page its viewport.
+        // Without it `innerWidth`/`innerHeight` are 0 and the deck lays out
+        // against nothing.
+        offscreen.show_all();
+
+        EXPORT_CONTAINER.with(|slot| *slot.borrow_mut() = Some(offscreen));
+    })?;
+
+    Ok(RenderMode::GtkOffscreen)
+}
+
+/// Keep the export window hidden and tell WebView2 to render into it anyway.
+///
+/// The HWND is never shown: `tauri.conf.json` declares the window hidden and
+/// only presentation mode calls `show`. That alone would produce the clipped,
+/// over-sized deck described in the module comment, because WebView2 derives
+/// the page's `visibilityState` — and with it whether the compositor runs,
+/// whether animation frames are delivered, and whether images ever settle their
+/// layout box — from `ICoreWebView2Controller::IsVisible`, which wry sets from
+/// the window's own visibility when it creates the webview.
+///
+/// So the controller is told the opposite of the window. That combination is
+/// what WebView2 documents as the way to keep a webview live in a window that
+/// is not on screen; hiding the HWND is explicitly *not* what saves the
+/// renderer's resources, `IsVisible` is. Nothing about printing needs a window:
+/// `ICoreWebView2_7::PrintToPdf` is a browser-level call.
+///
+/// **Unverified.** No Windows machine was available; this is reasoned from the
+/// WebView2 contract and the GTK result, and the fidelity gate in
+/// `.github/workflows/ci.yml` is what actually has to prove it. If the cast or
+/// the call fails, the previous shape — a realized, undecorated window parked
+/// far offscreen — is restored rather than risking a silent mis-render.
+#[cfg(windows)]
+fn render_hidden(window: &tauri::WebviewWindow) -> Result<RenderMode, Box<dyn std::error::Error>> {
+    use std::sync::Arc;
+
+    // Sized even though it is never mapped: the WebView2 controller's bounds
+    // follow the client area, and that is the deck's viewport.
+    window.set_decorations(false)?;
+    window.set_size(LogicalSize::new(EXPORT_WIDTH, EXPORT_HEIGHT))?;
+    window.set_skip_taskbar(true)?;
+
+    let forced = Arc::new(AtomicBool::new(false));
+    let flag = Arc::clone(&forced);
+
+    // Runs inline: Tauri dispatches this to the main thread, and `setup` is
+    // already on it.
+    window.with_webview(move |platform| {
+        // SAFETY: `controller` is the live `ICoreWebView2Controller` Tauri
+        // created for this window, and this runs on the thread that created it,
+        // which is what the WebView2 COM objects require.
+        let set = unsafe { platform.controller().SetIsVisible(true) };
+        match set {
+            Ok(()) => flag.store(true, Ordering::SeqCst),
+            Err(error) => eprintln!(
+                "slideflare: could not keep the hidden WebView2 rendering ({error}); \
+                 falling back to an offscreen window"
+            ),
+        }
+    })?;
+
+    if !forced.load(Ordering::SeqCst) {
+        return render_in_a_window(window);
+    }
+
+    Ok(RenderMode::Webview2Hidden)
+}
+
+/// Render on macOS without anything reaching the user's eye.
+///
+/// macOS is the one platform that cannot be given a hidden or detached surface.
+/// A `WKWebView` in a window that was never ordered in is not merely invisible,
+/// it is *suspended*: AppKit reports the window as occluded, WebKit drops the
+/// web content process out of its visible activity state, and the print then
+/// waits forever for pages that are never drawn. That is not a prediction — it
+/// is how the earlier offscreen attempt presented, and why macOS used to be
+/// left with a centred, visible window. `NSPrintOperation` also insists on a
+/// real `NSWindow` for its (suppressed) sheet, so `-[WKWebView window]` has to
+/// keep returning one.
+///
+/// So the window is always ordered in, and the question is only how to stop
+/// anyone seeing it. Two answers, tried in order:
+///
+/// 1. **Switch occlusion detection off** and move the window off every display.
+///    `-[NSApplication _setWindowOcclusionDetectionEnabled:]` with `NO` makes
+///    `-[NSWindow occlusionState]` report every window visible, so the move no
+///    longer suspends anything. Private API, probed with `respondsToSelector:`.
+///    It is **not present on the GitHub `macos-latest` image** — the first CI
+///    run of this code reported the fallback — so in practice this is the path
+///    for older systems, and step 2 is what usually runs.
+/// 2. **Make it transparent** and leave it where it is. A window on screen is
+///    not occluded whatever its alpha, so the renderer keeps running; at
+///    [`GHOST_ALPHA`] there is nothing to see. Public API, no version
+///    assumptions. Mouse events are passed through so a stray click during a
+///    render lands on whatever is actually underneath.
+///
+/// The window is made borderless before either. AppKit constrains a *titled*
+/// window's frame to keep its title bar reachable, so the move in step 1 would
+/// be clamped back onto a screen; a borderless window is not constrained.
+#[cfg(target_os = "macos")]
+fn render_unoccluded(
+    window: &tauri::WebviewWindow,
+) -> Result<RenderMode, Box<dyn std::error::Error>> {
+    window.set_decorations(false)?;
+    window.set_size(LogicalSize::new(EXPORT_WIDTH, EXPORT_HEIGHT))?;
+
+    let mode = if disable_occlusion_detection() {
+        window.set_position(LogicalPosition::new(OFFSCREEN, OFFSCREEN))?;
+        RenderMode::AppKitUnoccluded
+    } else {
+        // Stays where `tauri.conf.json` centres it: off every display it would
+        // be occluded again, whatever its alpha.
+        make_transparent(window)?;
+        RenderMode::AppKitTransparent
+    };
+
+    // Ordered in either way. See the doc comment: a window that is not on
+    // screen at all suspends the web content process.
+    window.show()?;
+
+    Ok(mode)
+}
+
+/// Draw the export window at an alpha nobody can see, and let clicks through.
+#[cfg(target_os = "macos")]
+fn make_transparent(window: &tauri::WebviewWindow) -> Result<(), Box<dyn std::error::Error>> {
+    use objc2_app_kit::NSWindow;
+
+    let ptr = window.ns_window()?;
+    if ptr.is_null() {
+        return Err("the export window has no NSWindow to make transparent".into());
+    }
+
+    // SAFETY: `ns_window` hands back the `NSWindow` Tauri created for this
+    // window, checked non-null above, so the reference is valid and unaliased
+    // for this scope. `setup` runs on the main thread, which is where AppKit
+    // requires both setters to be called.
+    unsafe {
+        let ns_window: &NSWindow = &*ptr.cast::<NSWindow>();
+        ns_window.setAlphaValue(GHOST_ALPHA);
+        ns_window.setIgnoresMouseEvents(true);
+    }
+
     Ok(())
+}
+
+/// Ask AppKit to stop reporting windows as occluded. `false` if it would not.
+///
+/// Guarded by `respondsToSelector:` because the selector is private: it has been
+/// there since 10.9 and is what every offscreen-rendering macOS app leaned on,
+/// but nothing promised the next release would keep it, and an unrecognised
+/// selector is a crash rather than an error.
+///
+/// It is in fact **gone on the GitHub `macos-latest` image** — the first CI run
+/// of this code took the fallback — so `render_unoccluded` does not depend on
+/// it. Kept because it is strictly better where it exists: an offscreen window
+/// costs no compositing at all, where a transparent one is still drawn.
+#[cfg(target_os = "macos")]
+fn disable_occlusion_detection() -> bool {
+    use objc2::runtime::{Bool, Sel};
+    use objc2::{msg_send, sel, MainThreadMarker};
+    use objc2_app_kit::NSApplication;
+
+    let Some(mtm) = MainThreadMarker::new() else {
+        // `setup` runs on the main thread, so this is unreachable; returning
+        // false rather than panicking keeps a wrong assumption cosmetic.
+        return false;
+    };
+
+    let app = NSApplication::sharedApplication(mtm);
+    let selector: Sel = sel!(_setWindowOcclusionDetectionEnabled:);
+
+    // SAFETY: `respondsToSelector:` is declared on `NSObject` and takes a
+    // selector; `NSApplication` is one.
+    let responds: bool = unsafe { msg_send![&*app, respondsToSelector: selector] };
+    if !responds {
+        return false;
+    }
+
+    // SAFETY: checked above that the shared application implements it. The
+    // signature is `- (void)_setWindowOcclusionDetectionEnabled:(BOOL)enabled`.
+    let _: () = unsafe { msg_send![&*app, _setWindowOcclusionDetectionEnabled: Bool::NO] };
+
+    true
 }
 
 /// Render a deck to PDF or HTML and exit with the result.

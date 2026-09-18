@@ -21,6 +21,18 @@ fn main() {
         println!("cargo:rustc-env=SLIDEFLARE_GIT_COMMIT={commit}");
     }
 
+    // The platforms where the webview is WebKitGTK, spelled once. Mirrors the
+    // target list the `webkit2gtk`/`gtk`/`glib` dependencies are gated on in
+    // Cargo.toml, so the two cannot drift apart silently.
+    println!("cargo::rustc-check-cfg=cfg(gtk_platform)");
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if matches!(
+        target_os.as_str(),
+        "linux" | "dragonfly" | "freebsd" | "netbsd" | "openbsd"
+    ) {
+        println!("cargo::rustc-cfg=gtk_platform");
+    }
+
     tauri_build::build()
 }
 

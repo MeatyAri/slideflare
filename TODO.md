@@ -31,6 +31,41 @@
   - [x] also add some github actions to update the AUR versions
 - [x] a convenience option to install/update the slideflare skill after an update to the app or on first launch (maybe inside the tutorial section where we introduce it)
 - [ ] test the examples provided in the readme
+- [ ] windowless export on Windows and macOS — written, never run (see `docs/headless-export.md`)
+  - [x] Windows: `cli::gui::render_hidden` keeps the HWND hidden and forces
+        `ICoreWebView2Controller::SetIsVisible(true)`
+  - [x] macOS: `cli::gui::render_unoccluded`. The window has to stay ordered in,
+        so it goes borderless and then either moves offscreen with
+        `-[NSApplication _setWindowOcclusionDetectionEnabled:]` switched off, or
+        — since that private selector turned out to be **gone on
+        `macos-latest`** — stays put and is drawn at alpha 0.004 (not 0; AppKit
+        calls a fully transparent window occluded too)
+  - [x] frontend safety net: `nextFrames()` in `src/lib/export/export.svelte.ts`
+        is capped, and `waitForDeckReady` settles images and waits for the slide
+        measurements to stop moving before it trusts them
+  - [x] fidelity gate in `export-smoke`: render `examples/intro-to-slideflare.md`
+        twice on the same runner, once with `SLIDEFLARE_EXPORT_WINDOW=visible`,
+        and require identical pixels via `scripts/pdf-pixel-diff.py`
+  - [x] all three runners green, each on its intended path rather than the
+        fallback: `gtk-offscreen`, `webview2-hidden`, `appkit-transparent`, and
+        12/12 pages identical to the windowed render in every case. Neither
+        Windows nor macOS can be built here (no MSVC toolchain, no macOS SDK),
+        so CI remains the only thing that has ever executed either.
+  - [ ] revisit the macOS window once there is a Mac to test on. A transparent
+        window is a compromise — still composited, still a window on the user's
+        screen for the couple of seconds a render takes, and `show()` is
+        `makeKeyAndOrderFront:`, so it may take keyboard focus for that long.
+        Nothing here can observe either. Whether current macOS offers anything
+        better, and whether `orderFrontRegardless` avoids the focus steal
+        without AppKit then calling the window occluded, are the two questions
+        to answer on real hardware.
+- [ ] `<video>` never renders in a GTK windowless export. A `GtkOffscreenWindow`
+      starts no media pipeline, so the element never reports metadata and prints
+      collapsed. `main` did the same, but only by racing the print against the
+      load and winning. Decide whether a printed deck should show a poster frame,
+      then make it deliberate. `examples/example.md:103` is the case; readiness
+      deliberately does not wait on `loadedmetadata` because on GTK it never
+      comes and the wait would only cost every video deck its cap.
 - [x] add to AUR
 - [x] the reload button should reread the file and do the whole parsing pipeline assuming that something went wrong
 - [x] fix screen resizing issue
