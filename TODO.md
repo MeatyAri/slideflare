@@ -53,8 +53,12 @@
         so CI remains the only thing that has ever executed either.
   - [ ] revisit the macOS window once there is a Mac to test on. A transparent
         window is a compromise — still composited, still a window on the user's
-        screen for the couple of seconds a render takes. Whether current macOS
-        offers anything better is unanswerable from here.
+        screen for the couple of seconds a render takes, and `show()` is
+        `makeKeyAndOrderFront:`, so it may take keyboard focus for that long.
+        Nothing here can observe either. Whether current macOS offers anything
+        better, and whether `orderFrontRegardless` avoids the focus steal
+        without AppKit then calling the window occluded, are the two questions
+        to answer on real hardware.
 - [ ] `<video>` never renders in a GTK windowless export. A `GtkOffscreenWindow`
       starts no media pipeline, so the element never reports metadata and prints
       collapsed. `main` did the same, but only by racing the print against the
