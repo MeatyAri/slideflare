@@ -1,12 +1,16 @@
 # Headless export — what is possible, and what landed
 
-Status: **Linux/BSD only.** Implemented and verified against `main` (7c4255c).
-**Windows and macOS are untested and unchanged** — they still render into a real
-window, and nothing here has been run on either. Testing and porting them is a
-CI job, not a local one; it is tracked in `TODO.md`.
+Status: all three platforms are implemented; **only Linux/BSD is verified.**
 
-Everything under "Evidence" and "Verification" was measured on one machine: Arch,
-Wayland session, WebKitGTK 2.52.5, GTK 3.24.52, GTK 4.22.4.
+- **Linux/BSD** — landed and measured pixel-for-pixel against `main` (7c4255c).
+- **Windows and macOS** — implemented, compiled by CI, and **never run by hand
+  by anyone**. No machine was available for either. They are guarded by the
+  fidelity gate described under "Verification", which renders every deck twice
+  on the CI runner and requires the two to be identical; until that gate has
+  gone green on a real run, treat both as unproven.
+
+Everything under "Evidence" was measured on one machine: Arch, Wayland session,
+WebKitGTK 2.52.5, GTK 3.24.52, GTK 4.22.4.
 
 ## The question
 
@@ -23,14 +27,15 @@ Two different things get called "headless", and they have different answers:
 
 ## Verdict
 
-| | Linux/BSD | Windows | macOS |
-| --- | --- | --- | --- |
-| No window | **Done — output identical to the windowed build** | Likely, untested | Uncertain, three ranked experiments |
-| No display server | **Impossible** with WebKitGTK | Needs a window station (interactive session) | Needs an Aqua session |
+|                           | Linux/BSD                                         | Windows                                      | macOS                                        |
+| ------------------------- | ------------------------------------------------- | -------------------------------------------- | -------------------------------------------- |
+| Nothing visible on screen | **Done — output identical to the windowed build** | Implemented, unverified                      | Implemented, unverified                      |
+| No window object at all   | **Done**                                          | HWND exists, never shown                     | Impossible — the window must stay ordered in |
+| No display server         | **Impossible** with WebKitGTK                     | Needs a window station (interactive session) | Needs an Aqua session                        |
 
 The short version: **(1) is achievable and has landed on GTK; (2) is not
 achievable with system webviews and should be dropped as a goal.** The system
-webview *is* the renderer, and on every platform it is a UI-toolkit widget whose
+webview _is_ the renderer, and on every platform it is a UI-toolkit widget whose
 existence requires a display connection. Chromium can go display-free because it
 ships its own rasteriser and a headless platform layer; WebKitGTK, WKWebView and
 WebView2 do not expose one.
@@ -61,7 +66,7 @@ either. GTK 4.22's `libgtk-4.so.1` exports only `gdk_x11_display_open` and
 `_gdk_wayland_display_open` — no headless backend there either, so moving to
 `webkitgtk-6.0` would not change the answer.
 
-### Linux: a *window* is not needed at all
+### Linux: a _window_ is not needed at all
 
 A `WebKitWebView` that was **never added to any container, never realized, never
 mapped** prints a correct PDF:
@@ -86,16 +91,16 @@ consult the compositor at all.
 This contradicts the note that stood in `docs/testing-platform-exports.md`: an
 unrealized widget prints fine. What is unsafe is something else.
 
-### Linux: the *container* decides what the web content sees
+### Linux: the _container_ decides what the web content sees
 
 Same probe, measuring what JavaScript observes, across four container shapes:
 
-| container | `innerWidth x innerHeight` | `visibilityState` | rAF in 3s | layout reads |
-| --- | --- | --- | --- | --- |
-| `GtkOffscreenWindow`, shown | `1280x720` | `visible` | **3** | ok |
-| toplevel, realized, never mapped | `1280x720` | `hidden` | **0** | ok |
-| orphan widget + `set_size_request` | `0x0` | `hidden` | **0** | ok |
-| orphan widget | `0x0` | `hidden` | **0** | ok |
+| container                          | `innerWidth x innerHeight` | `visibilityState` | rAF in 3s | layout reads |
+| ---------------------------------- | -------------------------- | ----------------- | --------- | ------------ |
+| `GtkOffscreenWindow`, shown        | `1280x720`                 | `visible`         | **3**     | ok           |
+| toplevel, realized, never mapped   | `1280x720`                 | `hidden`          | **0**     | ok           |
+| orphan widget + `set_size_request` | `0x0`                      | `hidden`          | **0**     | ok           |
+| orphan widget                      | `0x0`                      | `hidden`          | **0**     | ok           |
 
 `document.fonts.ready` resolved and `offsetHeight` was correct in every case, so
 fonts and synchronous layout are safe everywhere. Animation frames and the
@@ -134,11 +139,18 @@ This is the class of failure `docs/testing-platform-exports.md` calls the
 dangerous one — success exit code, wrong file — and it is why the implementation
 uses a container the engine keeps rendering rather than one that merely hides.
 
-## What landed (Linux/BSD)
+## What landed
 
-`cli::gui::render_offscreen`, reached from `configure_export_window` behind a
-`gtk_platform` cfg that `build.rs` sets from the same target list Cargo.toml
-gates `webkit2gtk`/`gtk`/`glib` on:
+The main window is now declared `"visible": false` in `tauri.conf.json` and
+shown explicitly by presentation mode, so export mode never maps it at all — not
+even for the frame it would take to move or hide it again. From there each
+platform does whatever makes its engine call the content visible. All three are
+reached from `cli::gui::configure_export_window`.
+
+### Linux/BSD — `render_offscreen`
+
+Behind a `gtk_platform` cfg that `build.rs` sets from the same target list
+Cargo.toml gates `webkit2gtk`/`gtk`/`glib` on:
 
 1. `window.hide()` — the toplevel stays, unmapped and empty, because Tauri's
    window bookkeeping and the `RunEvent::Exit` guard in `run_app` key off it.
@@ -148,91 +160,161 @@ gates `webkit2gtk`/`gtk`/`glib` on:
    its viewport.
 4. Park the offscreen window in a `thread_local`, since it now owns the webview.
 
-`OFFSCREEN`, `set_position` and `set_skip_taskbar` are now Windows-only; the
-GTK path has no toplevel to move. No frontend change was needed.
+There is no window on the compositor and no position to set, so `OFFSCREEN` and
+`set_position` are not used here.
+
+### Windows — `render_hidden`
+
+The HWND is never shown. That alone would produce exactly the silent mis-scale
+described above, because WebView2 derives the page's `visibilityState` — and
+with it the compositor, animation frames, and whether images settle their layout
+box — from `ICoreWebView2Controller::IsVisible`, which wry sets from the window's
+own visibility when it creates the webview. So the controller is told the
+opposite of the window, through `with_webview`:
+
+```rust
+platform.controller().SetIsVisible(true)
+```
+
+That pairing is what WebView2 documents as the way to keep a webview live in a
+window that is not on screen: hiding the HWND is explicitly _not_ what releases
+the renderer's resources, `IsVisible` is. `ICoreWebView2_7::PrintToPdf` is a
+browser-level call and needs no window either way. If the call fails, the
+previous shape — a realized, undecorated window parked at `(-10000, -10000)` —
+is restored rather than risking a plausible-looking wrong PDF.
+
+### macOS — `render_unoccluded`
+
+macOS is the one platform that cannot be given a hidden or detached surface. A
+`WKWebView` in a window that was never ordered in is not merely invisible, it is
+_suspended_: AppKit reports the window as occluded, WebKit drops the web content
+process out of its visible activity state, and the print then waits forever for
+pages that are never drawn. That is not a prediction — it is how the earlier
+offscreen attempt presented, and why macOS used to be left with a centred,
+visible window. `NSPrintOperation` also insists on a real `NSWindow` for its
+(suppressed) sheet, so `-[WKWebView window]` has to keep returning one.
+
+The way out is to take away the signal rather than the window:
+
+1. Make the window borderless. AppKit constrains a _titled_ window's frame to
+   keep its title bar reachable, which would clamp the move back onto a screen;
+   a borderless window is not constrained.
+2. `-[NSApplication _setWindowOcclusionDetectionEnabled:]` with `NO`, so
+   `-[NSWindow occlusionState]` reports every window visible.
+3. Move it to `(-10000, -10000)` and order it in.
+
+Step 2 is private API. It is probed with `respondsToSelector:` first, and if it
+is missing the window simply stays where `tauri.conf.json` centres it and is
+visible for the few seconds a render takes — the old behaviour, which works.
+Flag it if the app is ever submitted to the App Store.
+
+### The escape hatch
+
+`SLIDEFLARE_EXPORT_WINDOW=visible` puts the old realized window back on every
+platform (`render_in_a_window`). Two jobs, both load-bearing:
+
+- Anyone whose runtime gets the visibility contract wrong can recover without
+  downgrading. This matters because the failure mode is a _plausible_ PDF rather
+  than an error.
+- It is the reference the CI fidelity gate compares against. See below.
+
+### Frontend
+
+Two changes, both safety nets rather than fixes for anything Linux needed:
+
+- `waitForDeckReady` now awaits `HTMLImageElement.decode()` on every image before
+  it trusts the measurements, then waits for the reported slide heights to stop
+  changing across two polls. Images not having settled is the _mechanism_ behind
+  every mis-scaled deck seen here, so this is the check that makes the failure
+  mode impossible rather than merely unlikely.
+- `nextFrames()` in `src/lib/export/export.svelte.ts` gained the same 1s cap its
+  twin in `+page.svelte` already had. Without it, a webview that stops delivering
+  animation frames hangs the export before `export_pdf` is ever invoked.
+
+Video is deliberately **not** waited on — see "Known difference" below.
 
 ## Verification
+
+### Linux — measured against `main`
 
 Reference is a binary built from `main` at 7c4255c on the same machine, with the
 same frontend build. `pdftoppm` at the stated resolution, then
 `magick compare -metric AE` per page; `AE` is the count of differing pixels, so
 `0` is exact.
 
-| check | result |
-| --- | --- |
-| `main` vs `main`, `example.md` (determinism of the baseline itself) | 7/7 pages `AE=0` @100dpi |
-| `main` vs offscreen, `example.md` | **7/7 pages `AE=0` @150dpi** |
-| `main` vs offscreen, `example.md` | **7/7 pages `AE=0` @300dpi** |
-| `main` vs offscreen, `intro-to-slideflare.md` | **12/12 pages `AE=0` @150dpi** |
-| `main` vs offscreen, second offscreen run (reproducibility) | 7/7 pages `AE=0` @150dpi |
-| `main` vs offscreen, `export html` | **byte-identical** (`cmp` clean, same md5) |
+| check                                                                      | result                           |
+| -------------------------------------------------------------------------- | -------------------------------- |
+| `main` vs `main`, `example.md` (determinism of the baseline itself)        | 7/7 pages `AE=0` @150dpi         |
+| `main` vs windowless, `example.md`                                         | **7/7 pages `AE=0` @150dpi**     |
+| `main` vs windowless, `example.md`                                         | **7/7 pages `AE=0` @300dpi**     |
+| `main` vs windowless, `intro-to-slideflare.md`                             | **12/12 pages `AE=0` @150dpi**   |
+| windowless vs windowless (reproducibility)                                 | 7/7 pages `AE=0` @150dpi         |
+| windowless vs `SLIDEFLARE_EXPORT_WINDOW=visible`, `intro-to-slideflare.md` | 12/12 pages `AE=0` @150dpi       |
+| `main` vs windowless, `export html`                                        | **byte-identical** (`cmp` clean) |
 
 Contracts and checks that also still hold: `cargo fmt --check`, `cargo clippy
---all-targets -- -D warnings` (with and without `custom-protocol`), `cargo test`
-(55 passed, 1 ignored), exit `1` on a missing deck, exit `4` on `--timeout 1`,
-and presentation mode still opening a normal window.
+--all-targets -- -D warnings`, `cargo test`, `bun run check` (0 errors), and
+presentation mode still opening a normal window.
 
-`examples/example.md` is the deck that matters most here: it is the one with a
-raster image and a `<video>`, the two elements the hidden-window failure showed
-up in.
+### Windows and macOS — the CI fidelity gate
+
+Neither could be built here, let alone run: this machine has no MSVC toolchain,
+no macOS SDK, and no cross C compiler, so `cargo check --target` fails in a build
+script for both. Every claim about those two paths is reasoned from the platform
+contracts above and is worth exactly what CI says it is worth.
+
+So `export-smoke` in `.github/workflows/ci.yml` gained a gate that can fail them.
+Everything else in that job passes for a deck that rendered _wrongly_ — the
+failure mode is a right page count, a right page size, a plausible file size and
+exit code 0. The gate instead renders `examples/intro-to-slideflare.md` twice on
+the same runner:
+
+```
+slideflare export pdf ... -o fidelity-windowless.pdf
+SLIDEFLARE_EXPORT_WINDOW=visible slideflare export pdf ... -o fidelity-windowed.pdf
+python scripts/pdf-pixel-diff.py fidelity-windowless.pdf fidelity-windowed.pdf --dpi 150
+```
+
+and requires them to rasterize identically. A reference produced by the same
+engine, the same fonts and the same machine is the only one worth having here; a
+committed PNG could not be, because text rasterizes differently on every platform
+and on any two runner images. On failure the first differing page is uploaded as
+an artifact.
+
+`scripts/pdf-pixel-diff.py` uses `pypdfium2` and `pillow` — pip wheels with the
+renderer inside them, so setup is the same two lines on all three runners, which
+`pdftoppm` and `magick` would not be.
+
+### Known difference: `<video>`
+
+`examples/example.md` has a `<video>` with a real file behind it, and the two
+modes do **not** agree on it:
+
+- Windowless (GTK): the offscreen window never starts a media pipeline, so the
+  element never reports metadata, and it is laid out collapsed.
+- `SLIDEFLARE_EXPORT_WINDOW=visible`: metadata arrives during the readiness wait
+  and the element is laid out at its full size.
+
+`main` printed it collapsed too, but only by winning a race — it reached the
+print before metadata arrived. The windowless path does not race; it deterministically
+never gets metadata. Either way the deck matches `main` byte for byte on this
+machine, which is why this is recorded rather than fixed here. The readiness
+check deliberately does not wait on `loadedmetadata`: it would only add the
+10s cap to every export with a video in it, on the one platform where the event
+never comes. `intro-to-slideflare.md` is the fidelity deck precisely because its
+video source does not resolve, so both modes collapse it identically. Tracked in
+`TODO.md`.
 
 ## Still to do
 
-### Phase 0 — make readiness frame-independent (frontend)
-
-Not required for GTK, but it is what would make any hidden-window fallback safe
-on the other platforms, and it fixes a real latent bug in the GUI path:
-
-- `src/lib/export/export.svelte.ts` — `nextFrames()` there has **no timer cap**,
-  unlike the one in `src/routes/view-slides/+page.svelte`. In any webview that
-  stops delivering animation frames, PDF export hangs before it ever invokes
-  `export_pdf`. Give it the same 1s cap. Worth doing on its own merits.
-- `waitForDeckReady` gains a media settle step after `document.fonts.ready`:
-  `await Promise.allSettled(Array.from(document.images).map((i) => i.decode()))`,
-  plus a `loadedmetadata`/`readyState >= 1` wait with a short per-element timeout
-  for `<video>` and `<iframe>`, then one more measurement pass.
-- Add the settled-media state to `readinessState()` so a timeout names it.
-
-### Phase 2 — Windows: keep the controller visible, hide the HWND
-
-WebView2's rendering is gated on `ICoreWebView2Controller::IsVisible`, which is a
-property of the controller, **not** of the parent HWND being shown. So the
-analogue of the GTK trick is: build the export window with `visible: false`, then
-`put_IsVisible(TRUE)` on the controller through `with_webview` so the renderer
-keeps running. `PrintToPdf` needs no change.
-
-Unknowns to settle in CI, not locally: whether WebView2 really keeps producing
-rendering updates for a controller marked visible inside a never-shown HWND, and
-whether the viewport comes out `1280x720` or `0x0`. Phase 0 is the fallback that
-makes the output correct either way.
-
-### Phase 3 — macOS: three ranked experiments
-
-Do **not** switch to `WKWebView.createPDF`. The module comment in
-`src-tauri/src/export/pdf_macos.rs` records why: `WKPDFConfiguration` carries only
-a capture rect, so it snapshots one continuous page and ignores the print
-stylesheet entirely. Recovering per-slide pagination would mean a macOS-only rect
-loop plus a PDF merge — a second, divergent renderer for one platform.
-
-Keeping the current print operation, try in order:
-
-1. **Disable occlusion detection.** `-[NSApplication _setWindowOcclusionDetectionEnabled:]`
-   with `NO`, then park the window offscreen as on Windows. Private API,
-   long-lived, used by Chromium and Electron for the same reason. Flag it if the
-   app is ever submitted to the App Store.
-2. **Zero-alpha window.** `alphaValue = 0`, `ignoresMouseEvents = true`, left at
-   its normal frame. Public API. Needs verifying that AppKit does not then call
-   it occluded — if it does, dead end, and the check is cheap.
-3. **Status quo.** Keep the window visible, accessory activation policy. No
-   regression, no win.
-
-### Phase 4 — CI
-
-`xvfb-run` **stays** on Linux: this removes the window, not the display
-requirement. Add a fidelity assertion to `export-smoke` so a silent mis-scale
-cannot pass: render the example deck, `pdftoppm` it, and `compare -metric AE`
-against committed reference PNGs. That is the check that would have caught the
-hidden-window regression; nothing currently in CI would.
+- **Watch the first green run of the fidelity gate on Windows and macOS.** Until
+  then the two paths are untested code, and the sentences above describing what
+  WebView2 and AppKit do are citations, not measurements.
+- **Render `<video>` in the windowless GTK export**, or decide deliberately that
+  a printed deck shows a poster frame and make that explicit rather than
+  emergent.
+- **`xvfb-run` stays on Linux.** This removes the window, not the display
+  requirement.
 
 ## Rejected alternatives
 
@@ -242,8 +324,8 @@ hidden-window regression; nothing currently in CI would.
   protocols, so this means reimplementing IPC and ending up with the parallel,
   drifting code path the CLI was designed to avoid.
 - **Drive a headless Chromium over CDP.** Genuinely display-free and
-  cross-platform, but it adds an external runtime dependency and a *second
-  renderer*, so PDF output would no longer match what the user sees in the app.
+  cross-platform, but it adds an external runtime dependency and a _second
+  renderer_, so PDF output would no longer match what the user sees in the app.
   Worth revisiting only if a server-side render service becomes a product goal,
   and then as an explicitly separate `--renderer` backend.
 - **WPE WebKit.** Designed for exactly this (embedded/headless, no X or Wayland)
@@ -258,15 +340,21 @@ hidden-window regression; nothing currently in CI would.
 
 ## Reproducing the comparison
 
+The same check CI runs, locally, on any platform:
+
 ```
 bun run build
-cd src-tauri && cargo build --features custom-protocol
-./src-tauri/target/debug/slideflare export pdf examples/example.md -o cand.pdf
-# then against a binary built from main:
-pdftoppm -png -r 150 ref.pdf /tmp/a && pdftoppm -png -r 150 cand.pdf /tmp/b
-magick compare -metric AE /tmp/a-1.png /tmp/b-1.png null:
+cd src-tauri && cargo build --release --features custom-protocol
+target/release/slideflare export pdf ../examples/intro-to-slideflare.md -o a.pdf
+SLIDEFLARE_EXPORT_WINDOW=visible \
+  target/release/slideflare export pdf ../examples/intro-to-slideflare.md -o b.pdf
+pip install pypdfium2 pillow
+python ../scripts/pdf-pixel-diff.py a.pdf b.pdf --dpi 150
 ```
 
-Note the ordering: `frontendDist` is embedded at *Rust* compile time, so a
+To compare against another commit instead, build a binary from it and diff the
+two the same way.
+
+Note the ordering: `frontendDist` is embedded at _Rust_ compile time, so a
 frontend-only rebuild changes nothing until `cargo build` runs again. That cost
 one round of confusing results during this spike.

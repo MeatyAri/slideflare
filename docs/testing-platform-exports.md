@@ -238,7 +238,16 @@ moved to `(-10000, -10000)`. Two caveats found while building it:
 - This does **not** remove the display-server requirement. `gtk_init` still fails
   outright with no `DISPLAY`/`WAYLAND_DISPLAY`, so CI keeps `xvfb-run`.
 
-Windows and macOS are unchanged and still use the realized-window shape.
+Windows and macOS since went the same way, by different routes: Windows keeps
+its HWND hidden and forces `ICoreWebView2Controller::SetIsVisible(true)`, and
+macOS keeps its window ordered in (AppKit suspends WebKit in one that is not)
+but borderless, offscreen, and with occlusion detection switched off. Neither
+has been run on the platform it targets. What stands behind them instead is the
+fidelity step in `export-smoke`, described under Tier 3 below.
+
+`SLIDEFLARE_EXPORT_WINDOW=visible` puts the realized-window shape back on every
+platform, which is both the escape hatch for a runtime that gets this wrong and
+the reference that fidelity step compares against.
 
 The readiness signal — the one genuine piece of new design work — lives in
 `src/routes/view-slides/+page.svelte` as `waitForDeckReady`, emitting `deck-ready`
@@ -321,12 +330,32 @@ bytes and work on all three runners. Item 4 needs a rasterizer (`pdftoppm` is
 trivial on Linux, awkward elsewhere), so run structure checks everywhere and the
 colour check on Linux only.
 
-Avoid pixel-golden diffs. Font rasterization differs per platform and they will
-flap.
+Avoid pixel-golden _committed_ diffs. Font rasterization differs per platform —
+and between any two runner images — so a checked-in reference PNG will flap.
 
-**Built so far:** item 1 on all three runners (both exports), and items 2 and 3
-on Linux via `pdfinfo`, with the expected slide count taken from `slideflare
-validate` rather than hardcoded so the fixture can grow.
+5. The windowless render is pixel-identical to the same deck rendered in a real
+   window on the same runner.
+
+Number 5 is the one that took the longest to find a shape for, and it is now the
+only thing standing behind the Windows and macOS windowless exports, neither of
+which anyone has run by hand. It sidesteps the objection above by generating its
+reference on the spot: `SLIDEFLARE_EXPORT_WINDOW=visible` restores the realized
+window every platform used to use, so the same runner, the same engine and the
+same fonts produce both sides of the comparison. See
+`scripts/pdf-pixel-diff.py`, which rasterizes through `pypdfium2` — a pip wheel
+with the renderer inside it, so the setup is identical on all three runners in a
+way `pdftoppm` and `magick` are not.
+
+The fidelity deck is `examples/intro-to-slideflare.md` rather than
+`examples/example.md`, because the latter has a `<video>` whose layout depends
+on whether the media pipeline reported metadata before the print, and a GTK
+offscreen window never starts one. That is a real difference between the two
+modes, not a regression the gate should be reporting; `TODO.md` tracks it.
+
+**Built so far:** item 1 on all three runners (both exports), items 2 and 3 on
+Linux via `pdfinfo`, with the expected slide count taken from `slideflare
+validate` rather than hardcoded so the fixture can grow, and item 5 on all three
+runners.
 
 **Item 4 is still open in CI**, though it has now been run by hand on both
 platforms that produce a PDF differently. Page 1 of `examples/example.md`

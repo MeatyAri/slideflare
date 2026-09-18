@@ -31,20 +31,35 @@
   - [x] also add some github actions to update the AUR versions
 - [x] a convenience option to install/update the slideflare skill after an update to the app or on first launch (maybe inside the tutorial section where we introduce it)
 - [ ] test the examples provided in the readme
-- [ ] windowless export on Windows and macOS (Linux is done; see `docs/headless-export.md`)
-  - [ ] Windows: build the export window with `visible: false`, then force
-        `ICoreWebView2Controller::put_IsVisible(TRUE)` so the renderer keeps
-        running inside a never-shown HWND
-  - [ ] macOS: try `-[NSApplication _setWindowOcclusionDetectionEnabled:]` with
-        `NO` plus the offscreen move; fall back to a zero-alpha window
-  - [ ] make the frontend readiness frame-independent first, since it is the
-        safety net on both: cap `nextFrames()` in `src/lib/export/export.svelte.ts`
-        (it has none today and hangs when frames stop) and settle images/video
-        in `waitForDeckReady` before measuring
-  - [ ] prove it in CI, not locally — neither platform can be tested from here.
-        Add a fidelity gate to `export-smoke`: render `examples/example.md`,
-        `pdftoppm` it, and `compare -metric AE` against committed reference PNGs,
-        so a silently mis-scaled deck cannot pass as a success
+- [ ] windowless export on Windows and macOS — written, never run (see `docs/headless-export.md`)
+  - [x] Windows: `cli::gui::render_hidden` keeps the HWND hidden and forces
+        `ICoreWebView2Controller::SetIsVisible(true)`
+  - [x] macOS: `cli::gui::render_unoccluded` goes borderless, switches off
+        `-[NSApplication _setWindowOcclusionDetectionEnabled:]` and moves the
+        window offscreen, since it has to stay ordered in
+  - [x] frontend safety net: `nextFrames()` in `src/lib/export/export.svelte.ts`
+        is capped, and `waitForDeckReady` settles images and waits for the slide
+        measurements to stop moving before it trusts them
+  - [x] fidelity gate in `export-smoke`: render `examples/intro-to-slideflare.md`
+        twice on the same runner, once with `SLIDEFLARE_EXPORT_WINDOW=visible`,
+        and require identical pixels via `scripts/pdf-pixel-diff.py`
+  - [ ] **watch that gate go green on the Windows and macOS runners.** Neither
+        path has been built, let alone run, on the platform it targets; this
+        machine has no MSVC toolchain and no macOS SDK. Until CI says otherwise,
+        both are unproven, and every claim about what WebView2 and AppKit do is
+        a citation rather than a measurement.
+  - [ ] if macOS fails: `_setWindowOcclusionDetectionEnabled:` is private and
+        probed with `respondsToSelector:`, so a missing selector degrades to a
+        visible window rather than failing. The next thing to try is a
+        zero-alpha window at its normal frame — public API, and the check is
+        cheap.
+- [ ] `<video>` never renders in a GTK windowless export. A `GtkOffscreenWindow`
+      starts no media pipeline, so the element never reports metadata and prints
+      collapsed. `main` did the same, but only by racing the print against the
+      load and winning. Decide whether a printed deck should show a poster frame,
+      then make it deliberate. `examples/example.md:103` is the case; readiness
+      deliberately does not wait on `loadedmetadata` because on GTK it never
+      comes and the wait would only cost every video deck its cap.
 - [x] add to AUR
 - [x] the reload button should reread the file and do the whole parsing pipeline assuming that something went wrong
 - [x] fix screen resizing issue

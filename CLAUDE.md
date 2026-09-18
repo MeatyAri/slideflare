@@ -110,16 +110,23 @@ Three things that will bite:
   failure, `2` usage, `3` parse error, `4` timeout. Tauri exits `0` when the last
   window closes, so `run_export` intercepts `RunEvent::Exit` and fails unless the
   export actually reported back.
-- **On GTK the export has no window at all.** `cli::gui::render_offscreen` moves
-  the webview into a `GtkOffscreenWindow` and hides the toplevel. Printing never
-  needed a window; what does need one is the deck measuring itself, because a
-  container the engine calls hidden never settles image layout and every slide
-  then prints over-sized at exit code 0. An offscreen window is visible as far as
-  the engine is concerned, so both hold. A display server is still required —
-  `gtk_init` fails without one. **This is Linux/BSD only and verified there
-  only** — Windows still parks a realized window offscreen, macOS cannot even do
-  that (AppKit calls a fully offscreen window occluded and WebKit then stops
-  rendering), and neither has been tested windowless. See `docs/headless-export.md`.
+- **The export shows no window on any platform**, and the reason it can is not
+  the same twice. Printing never needed a window; what does need one is the deck
+  measuring itself, because a surface the engine calls hidden never settles image
+  layout and every slide then prints over-sized at exit code 0 — a wrong file,
+  not an error. So `cli::gui::configure_export_window` gives each engine whatever
+  makes it call the content visible: GTK reparents the webview into a
+  `GtkOffscreenWindow` (`render_offscreen`, no window at all); Windows keeps the
+  HWND hidden and forces `ICoreWebView2Controller::SetIsVisible(true)`
+  (`render_hidden`); macOS must keep its window ordered in, so it goes borderless,
+  switches off AppKit occlusion detection and moves offscreen
+  (`render_unoccluded`). A display server is still required on Linux —
+  `gtk_init` fails without one.
+  **Only the GTK path has ever been run.** Windows and macOS are unverified; the
+  fidelity gate in `.github/workflows/ci.yml` — render twice, once with
+  `SLIDEFLARE_EXPORT_WINDOW=visible`, and require identical pixels — is what has
+  to prove them. That variable is also the user-facing escape hatch back to a
+  real window. See `docs/headless-export.md`.
 - **`tauri::generate_context!` may be expanded only once in the crate.** Every
   expansion emits an `_EMBED_INFO_PLIST` symbol, and a second one fails the macOS
   link — invisible on Linux and Windows, so CI is what tells you. `run_app` holds

@@ -81,6 +81,9 @@ objc2-foundation = { version = "0.3", features = [
   "NSObject",
 ] }
 objc2-app-kit = { version = "0.3", features = [
+  # `_setWindowOcclusionDetectionEnabled:` is sent to the shared application —
+  # see `cli::gui::disable_occlusion_detection`.
+  "NSApplication",
   "NSPrintInfo",
   "NSPrintOperation",
   # `runOperationModalForWindow:` and `NSView::window` both sit behind these.
