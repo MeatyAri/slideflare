@@ -1,5 +1,6 @@
 # TODO:
 
+- [ ] use a thumbnail as a place holder for videos in PDF exports
 - [ ] add better default styling
   - [ ] to heading tags
 - [ ] add the cool intro example (make it prettier)

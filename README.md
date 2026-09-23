@@ -27,7 +27,7 @@ That's it. You get:
 
 Perfect for lightning-fast talks, internal docs, teaching materials, and conference submissions.
 
-![Slideflare Demo](./examples/images/slideflare.webp)
+![Slideflare Demo](./docs/images/github-banner.webp)
 
 ```
 Describe your deck → slideflare-slides generates the Markdown → open in SlideFlare → present
@@ -162,7 +162,7 @@ Please review our contributing guidelines and code of conduct before contributin
 
 ### 0.2.0
 
-- [ ] AI-powered slide conversion (PowerPoint / PDF)
+- [x] AI-powered slide conversion (PowerPoint / PDF)
 - [ ] Mermaid diagram support
 - [ ] Shiki Magic Move for animated code transitions
 - [ ] Custom themes via JSON config
@@ -171,7 +171,7 @@ Please review our contributing guidelines and code of conduct before contributin
 
 - [ ] Multipart slides for complex layouts
 - [ ] Parallel processing optimizations
-- [ ] PDF export
+- [x] PDF & HTML exports
 - [ ] Online sharing with generated links
 
 ### Future

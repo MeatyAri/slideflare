@@ -1,0 +1,387 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <defs>
+    <!-- Brand Flame Gradients (Warm amber to ruby flame, ZERO PURPLE) -->
+    <linearGradient id="logoGrad" x1="74.5" y1="16" x2="434.5" y2="496" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#f5a54b" />
+      <stop offset="40%" stop-color="#ee804b" />
+      <stop offset="70%" stop-color="#d83f62" />
+      <stop offset="100%" stop-color="#c62961" />
+    </linearGradient>
+
+    <linearGradient id="textFlareGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f5a54b" />
+      <stop offset="45%" stop-color="#ee804b" />
+      <stop offset="85%" stop-color="#d83f62" />
+      <stop offset="100%" stop-color="#c62961" />
+    </linearGradient>
+
+    <!-- Glass Window Borders & Surfaces (Clean charcoal/slate, zero purple) -->
+    <linearGradient id="windowBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f5a54b" stop-opacity="0.8" />
+      <stop offset="35%" stop-color="#ee804b" stop-opacity="0.4" />
+      <stop offset="70%" stop-color="#38bdf8" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.08" />
+    </linearGradient>
+
+    <linearGradient id="windowSurface" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0e131d" />
+      <stop offset="100%" stop-color="#080b11" />
+    </linearGradient>
+
+    <!-- Top Laser Accent Line (Flame to cyan, no purple) -->
+    <linearGradient id="laserLine" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f5a54b" stop-opacity="0" />
+      <stop offset="20%" stop-color="#f5a54b" stop-opacity="0.85" />
+      <stop offset="55%" stop-color="#ee804b" stop-opacity="0.9" />
+      <stop offset="85%" stop-color="#38bdf8" stop-opacity="0.7" />
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0" />
+    </linearGradient>
+
+    <linearGradient id="glassReflection" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.08" />
+      <stop offset="40%" stop-color="#ffffff" stop-opacity="0.01" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Clean Tech Dot Grid Pattern -->
+    <pattern id="dotGrid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <circle cx="16" cy="16" r="1.1" fill="#64748b" fill-opacity="0.12" />
+    </pattern>
+
+    <radialGradient id="gridMaskGrad" cx="50%" cy="50%" r="62%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="1" />
+      <stop offset="80%" stop-color="#ffffff" stop-opacity="0.45" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.05" />
+    </radialGradient>
+    <mask id="gridMask">
+      <rect width="1280" height="640" fill="url(#gridMaskGrad)" />
+    </mask>
+
+    <!-- Warm Ambient Lighting Filters (Zero purple!) -->
+    <filter id="ambientBlur" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="95" result="blur" />
+    </filter>
+
+    <filter id="cardShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="24" stdDeviation="36" flood-color="#000000" flood-opacity="0.9" />
+    </filter>
+
+    <filter id="logoGlowFilter" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="28" result="blur" />
+    </filter>
+
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+    </filter>
+
+    <filter id="activeDotGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#3b82f6" flood-opacity="0.85" />
+    </filter>
+
+    <!-- Clips the presentation body to the rounded window frame so the slide
+         canvas cannot square off the bottom corners. -->
+    <clipPath id="windowClip">
+      <rect width="604" height="440" rx="14" />
+    </clipPath>
+  </defs>
+
+  <!-- ================= CANVAS BASE ================= -->
+  <!-- Dark obsidian backdrop, zero purple slop -->
+  <rect width="1280" height="640" fill="#07090e" />
+
+  <!-- Warm Flame Ambient Glows (Amber & subtle flame warmth only) -->
+  <g filter="url(#ambientBlur)">
+    <ellipse cx="200" cy="160" rx="220" ry="160" fill="#f5a54b" fill-opacity="0.14" />
+    <ellipse cx="580" cy="320" rx="260" ry="180" fill="#ee804b" fill-opacity="0.06" />
+    <ellipse cx="1060" cy="240" rx="240" ry="200" fill="#f5a54b" fill-opacity="0.09" />
+    <ellipse cx="980" cy="450" rx="200" ry="160" fill="#0284c7" fill-opacity="0.08" />
+  </g>
+
+  <!-- Dot Grid Pattern -->
+  <rect width="1280" height="640" fill="url(#dotGrid)" mask="url(#gridMask)" />
+
+  <!-- Top Laser Line -->
+  <rect x="0" y="0" width="1280" height="2" fill="url(#laserLine)" />
+
+  <!-- ================= LEFT COLUMN: HERO IDENTITY ================= -->
+  <!-- Safe Zone: x=96 (>= 80px), y=90..532 -->
+
+  <!-- Top Status Pill -->
+  <g transform="translate(96, 90)">
+    <rect width="262" height="30" rx="15" fill="#0f141f" stroke="#1e293b" stroke-width="1.2" />
+    <circle cx="16" cy="15" r="4" fill="#10b981" />
+    <circle cx="16" cy="15" r="7" fill="#10b981" fill-opacity="0.3" filter="url(#softGlow)" />
+    <text x="29" y="19.5" font-family="JetBrains Mono" font-size="11" font-weight="700" fill="#cbd5e1" letter-spacing="0.5">PRESENTATION PLATFORM</text>
+    <rect x="188" y="5" width="64" height="20" rx="10" fill="#0284c7" fill-opacity="0.2" stroke="#38bdf8" stroke-opacity="0.4" stroke-width="1" />
+    <text x="220" y="18.5" font-family="JetBrains Mono" font-size="9.5" font-weight="700" fill="#38bdf8" text-anchor="middle">v0.1.3</text>
+  </g>
+
+  <!-- Brand Block: Logo + Wordmark -->
+  <g transform="translate(96, 138)">
+    <circle cx="48" cy="48" r="50" fill="#f5a54b" fill-opacity="0.32" filter="url(#logoGlowFilter)" />
+    <circle cx="48" cy="48" r="36" fill="#ee804b" fill-opacity="0.25" filter="url(#logoGlowFilter)" />
+
+    <!-- Exact SVG Logo from static/logo.svg (96x96px) -->
+    <g transform="scale(0.1875)">
+      <g fill="url(#logoGrad)">
+        <path d="M 66.5,71 A 55,55 0 0,1 121.5,16 L 345.5,16 L 146.5,288 L 236.5,288 L 189.5,418 L 121.5,418 A 55,55 0 0,1 66.5,363 Z" />
+        <path d="M 445.5,441 A 55,55 0 0,1 390.5,496 L 166.5,496 L 365.5,224 L 275.5,224 L 322.5,94 L 390.5,94 A 55,55 0 0,1 445.5,149 Z" />
+      </g>
+    </g>
+
+    <!-- Wordmark -->
+    <g transform="translate(114, 68)">
+      <text font-family="Adwaita Sans, Roboto, sans-serif" font-size="58" font-weight="900" letter-spacing="-2">
+        <tspan fill="#ffffff">Slide</tspan><tspan fill="url(#textFlareGrad)">Flare</tspan>
+      </text>
+    </g>
+  </g>
+
+  <!-- Main Headline -->
+  <g transform="translate(96, 272)">
+    <text font-family="Adwaita Sans, Roboto, sans-serif" font-size="30" font-weight="800" fill="#f8fafc" letter-spacing="-0.8">
+      From Markdown to polished slides.
+    </text>
+    <text y="34" font-family="Adwaita Sans, Roboto, sans-serif" font-size="20" font-weight="500" fill="#94a3b8">
+      No design skills required. Fast as Rust.
+    </text>
+    <!-- Truncated to avoid creeping underneath the window preview -->
+    <text y="66" font-family="Adwaita Sans, Roboto, sans-serif" font-size="14" font-weight="400" fill="#64748b">
+      Instant live reload • LaTeX MathML • Tailwind CSS
+    </text>
+  </g>
+
+  <!-- Feature Pills: Row 1 -->
+  <g transform="translate(96, 378)">
+    <g>
+      <rect width="138" height="32" rx="8" fill="#0f141f" stroke="#f5a54b" stroke-opacity="0.45" stroke-width="1.2"/>
+      <circle cx="16" cy="16" r="3.5" fill="#f5a54b" />
+      <text x="27" y="20.5" font-family="JetBrains Mono" font-size="11.5" font-weight="600" fill="#f1f5f9">Rust + Tauri</text>
+    </g>
+
+    <g transform="translate(148, 0)">
+      <rect width="114" height="32" rx="8" fill="#0f141f" stroke="#ee804b" stroke-opacity="0.45" stroke-width="1.2"/>
+      <circle cx="16" cy="16" r="3.5" fill="#ee804b" />
+      <text x="27" y="20.5" font-family="JetBrains Mono" font-size="11.5" font-weight="600" fill="#f1f5f9">Svelte 5</text>
+    </g>
+
+    <g transform="translate(272, 0)">
+      <rect width="144" height="32" rx="8" fill="#0f141f" stroke="#38bdf8" stroke-opacity="0.4" stroke-width="1.2"/>
+      <circle cx="16" cy="16" r="3.5" fill="#38bdf8" />
+      <text x="27" y="20.5" font-family="JetBrains Mono" font-size="11.5" font-weight="600" fill="#f1f5f9">LaTeX MathML</text>
+    </g>
+  </g>
+
+  <!-- Feature Pills: Row 2 -->
+  <g transform="translate(96, 420)">
+    <g>
+      <rect width="138" height="32" rx="8" fill="#0f141f" stroke="#06b6d4" stroke-opacity="0.4" stroke-width="1.2"/>
+      <circle cx="16" cy="16" r="3.5" fill="#06b6d4" />
+      <text x="27" y="20.5" font-family="JetBrains Mono" font-size="11.5" font-weight="600" fill="#f1f5f9">Tailwind CSS</text>
+    </g>
+
+    <g transform="translate(148, 0)">
+      <rect width="146" height="32" rx="8" fill="#0f141f" stroke="#f5a54b" stroke-opacity="0.45" stroke-width="1.2"/>
+      <circle cx="16" cy="16" r="3.5" fill="#f5a54b" />
+      <text x="27" y="20.5" font-family="JetBrains Mono" font-size="11.5" font-weight="600" fill="#f1f5f9">AI Deck Skill</text>
+    </g>
+
+    <g transform="translate(304, 0)">
+      <rect width="138" height="32" rx="8" fill="#0f141f" stroke="#10b981" stroke-opacity="0.4" stroke-width="1.2"/>
+      <circle cx="16" cy="16" r="3.5" fill="#10b981" />
+      <text x="27" y="20.5" font-family="JetBrains Mono" font-size="11.5" font-weight="600" fill="#f1f5f9">PDF + HTML</text>
+    </g>
+  </g>
+
+  <!-- CLI Shell Box -->
+  <g transform="translate(96, 480)">
+    <rect width="458" height="42" rx="8" fill="#0a0d14" stroke="#1e293b" stroke-width="1.2" />
+    <circle cx="20" cy="21" r="5" fill="#334155" />
+    <text x="36" y="26" font-family="JetBrains Mono" font-size="12.5" font-weight="500" fill="#94a3b8">$</text>
+    <text x="52" y="26" font-family="JetBrains Mono" font-size="12.5" font-weight="600" fill="#f8fafc">slideflare deck.md</text>
+    <text x="236" y="26" font-family="JetBrains Mono" font-size="12.5" font-weight="500" fill="#f5a54b">--export</text>
+    <text x="312" y="26" font-family="JetBrains Mono" font-size="12.5" font-weight="500" fill="#cbd5e1">pdf</text>
+    <rect x="368" y="11" width="76" height="20" rx="4" fill="#131b29" stroke="#1e293b" stroke-width="1" />
+    <text x="406" y="24.5" font-family="JetBrains Mono" font-size="9.5" font-weight="700" fill="#38bdf8" text-anchor="middle">OFFLINE</text>
+  </g>
+
+
+  <!-- ================= RIGHT COLUMN: FULL PRESENTATION WINDOW WITH ICONIC NAVBAR ================= -->
+  <!-- Safe zone: x=580 to 1184 (width 604, <= 1200px) -->
+  <g transform="translate(580, 90)" filter="url(#cardShadow)">
+    <g clip-path="url(#windowClip)">
+    <!-- Outer Window Frame (fill only; the gradient stroke is drawn on top,
+         outside the clip, so the clip cannot eat half of it) -->
+    <rect width="604" height="440" rx="14" fill="url(#windowSurface)" />
+    
+    <!-- Top Glass Reflection Overlay -->
+    <path d="M 0 14 C 0 6.268 6.268 0 14 0 L 590 0 C 597.732 0 604 6.268 604 14 L 604 140 L 0 70 Z" fill="url(#glassReflection)" />
+
+    <!-- Window Titlebar -->
+    <path d="M 0 14 C 0 6.268 6.268 0 14 0 L 590 0 C 597.732 0 604 6.268 604 14 L 604 40 L 0 40 Z" fill="#0d111a" />
+    <line x1="0" y1="40" x2="604" y2="40" stroke="#1a2334" stroke-width="1" />
+
+    <!-- Traffic Light Buttons -->
+    <circle cx="22" cy="20" r="5.5" fill="#ef4444" />
+    <circle cx="38" cy="20" r="5.5" fill="#f59e0b" />
+    <circle cx="54" cy="20" r="5.5" fill="#10b981" />
+
+    <!-- File Tab -->
+    <rect x="76" y="9" width="144" height="23" rx="6" fill="#141a26" stroke="#222c3f" stroke-width="1"/>
+    <text x="88" y="24.5" font-family="JetBrains Mono" font-size="11" font-weight="600" fill="#e2e8f0">async-tokio.md</text>
+
+    <!-- Hot Reload Live Pill -->
+    <g transform="translate(232, 10)">
+      <rect width="98" height="21" rx="10.5" fill="#10b981" fill-opacity="0.12" stroke="#10b981" stroke-opacity="0.35" stroke-width="1"/>
+      <circle cx="12" cy="10.5" r="3.5" fill="#10b981" />
+      <text x="22" y="14" font-family="JetBrains Mono" font-size="9" font-weight="700" fill="#34d399">HOT RELOAD</text>
+    </g>
+
+    <!-- SlideFlare window header label: right-aligned inside window frame with safe 20px padding -->
+    <text x="584" y="24.5" font-family="JetBrains Mono" font-size="11" font-weight="600" fill="#475569" text-anchor="end">SlideFlare</text>
+
+    <!-- Window Presentation Body (x: 0, y: 40, width: 604, height: 400) -->
+    <g transform="translate(0, 40)">
+      <!-- Slide Canvas: Clean dark obsidian background #0a0d14, ZERO PURPLE -->
+      <rect width="604" height="400" fill="#0a0d14" />
+
+      <!-- ================= SLIDE MAIN CONTENT AREA ================= -->
+      <!-- Placed before navbar in DOM so navbar and tooltips render ON TOP -->
+      <g transform="translate(68, 0)">
+        <!-- Slide Top Bar: Category Pill & Slide counter -->
+        <g transform="translate(0, 20)">
+          <!-- Category Tag (positioned at y=0, height=22) -->
+          <rect width="180" height="22" rx="11" fill="#f5a54b" fill-opacity="0.1" stroke="#f5a54b" stroke-opacity="0.3" stroke-width="1" />
+          <text x="12" y="15" font-family="JetBrains Mono" font-size="9.5" font-weight="700" fill="#f5a54b" letter-spacing="0.5">⚡ CONCURRENCY &amp; RUNTIMES</text>
+
+          <!-- Slide Indicator -->
+          <text x="508" y="15" font-family="JetBrains Mono" font-size="10" font-weight="600" fill="#64748b" text-anchor="end">Slide 03 / 12</text>
+        </g>
+
+        <!-- Slide Title & Subtitle: shifted down to y=76 (giving 34px clean breathing room below tag) -->
+        <g transform="translate(0, 76)">
+          <text font-family="Adwaita Sans, Roboto, sans-serif" font-size="27" font-weight="900" fill="#ffffff" letter-spacing="-0.8">
+            Tokio Async Engine
+          </text>
+          <text y="22" font-family="Adwaita Sans, Roboto, sans-serif" font-size="13" font-weight="400" fill="#94a3b8">
+            Work-stealing task queues &amp; cooperative scheduling budget
+          </text>
+        </g>
+
+        <!-- Real MathML Formula Box -->
+        <g transform="translate(0, 122)">
+          <rect width="508" height="74" rx="10" fill="#111622" stroke="#1e293b" stroke-width="1.2" />
+          <text x="14" y="20" font-family="JetBrains Mono" font-size="9" font-weight="700" fill="#94a3b8" letter-spacing="0.5">LATEX MATHML MODEL</text>
+          
+          <!-- Exact rendered formula -->
+          <g transform="translate(254, 51)" font-family="Times New Roman, DejaVu Serif, serif" font-size="20" fill="#ffffff" text-anchor="middle">
+            <text font-style="italic">τ<tspan font-size="13" dy="3">exec</tspan><tspan font-size="20" dy="-3" font-style="normal"> = </tspan><tspan font-size="24" font-style="normal">∑</tspan><tspan font-size="12" dy="7">i=1</tspan><tspan font-size="11" dy="-18">n</tspan><tspan font-size="20" dy="11"> ω</tspan><tspan font-size="13" dy="3">i</tspan><tspan font-size="20" dy="-3" font-style="normal"> · Δt</tspan><tspan font-size="13" dy="3">i</tspan><tspan font-size="20" dy="-3" font-style="normal"> + </tspan><tspan font-style="normal">O</tspan><tspan font-size="20" font-style="normal">(1)</tspan></text>
+          </g>
+        </g>
+
+        <!-- Real Tailwind Metric Cards -->
+        <g transform="translate(0, 212)">
+          <!-- Card 1: Steal Latency -->
+          <g>
+            <rect width="244" height="84" rx="8" fill="#111622" stroke="#1e293b" stroke-width="1.2" />
+            <text x="14" y="22" font-family="JetBrains Mono" font-size="9.5" font-weight="700" fill="#94a3b8" letter-spacing="0.5">STEAL LATENCY</text>
+            <text x="14" y="56" font-family="JetBrains Mono" font-size="22" font-weight="800" fill="#34d399">12.4 µs</text>
+            <text x="136" y="55" font-family="JetBrains Mono" font-size="11" fill="#10b981" font-weight="600">(-42%)</text>
+            <!-- Sparkline indicator -->
+            <path d="M 14 70 L 60 68 L 106 63 L 152 66 L 198 59 L 230 58" fill="none" stroke="#10b981" stroke-width="1.5" stroke-linecap="round"/>
+          </g>
+
+          <!-- Card 2: Throughput -->
+          <g transform="translate(264, 0)">
+            <rect width="244" height="84" rx="8" fill="#111622" stroke="#1e293b" stroke-width="1.2" />
+            <text x="14" y="22" font-family="JetBrains Mono" font-size="9.5" font-weight="700" fill="#94a3b8" letter-spacing="0.5">THROUGHPUT</text>
+            <text x="14" y="56" font-family="JetBrains Mono" font-size="22" font-weight="800" fill="#f5a54b">1.8M</text>
+            <text x="82" y="55" font-family="JetBrains Mono" font-size="12" fill="#94a3b8">ops/s</text>
+            <rect x="14" y="68" width="216" height="4" rx="2" fill="#1e293b" />
+            <rect x="14" y="68" width="176" height="4" rx="2" fill="#f5a54b" />
+          </g>
+        </g>
+
+        <!-- Slide Footer Status -->
+        <g transform="translate(0, 314)">
+          <rect width="508" height="42" rx="6" fill="#0d111a" stroke="#161e2d" stroke-width="1" />
+          <text x="14" y="25" font-family="JetBrains Mono" font-size="10" fill="#94a3b8">SlideFlare Presentation View</text>
+          
+          <!-- Key Hint -->
+          <g transform="translate(370, 11)">
+            <rect width="56" height="20" rx="4" fill="#1e293b" />
+            <text x="28" y="14" font-family="JetBrains Mono" font-size="9" font-weight="700" fill="#cbd5e1" text-anchor="middle">← / →</text>
+            <rect x="64" y="0" width="60" height="20" rx="4" fill="#0284c7" fill-opacity="0.25" stroke="#38bdf8" stroke-opacity="0.4" stroke-width="1"/>
+            <text x="94" y="14" font-family="JetBrains Mono" font-size="9" font-weight="700" fill="#38bdf8" text-anchor="middle">Ctrl+E</text>
+          </g>
+        </g>
+
+        <!-- Bottom Slide Progress Bar -->
+        <g transform="translate(0, 372)">
+          <rect width="508" height="4" rx="2" fill="#161e2d" />
+          <rect width="140" height="4" rx="2" fill="url(#textFlareGrad)" />
+        </g>
+      </g>
+
+      <!-- ================= SLIDEFLARE ICONIC FIXED NAVBAR (LEFT RAIL) ================= -->
+      <!-- Rendered on top of slide so action buttons and dot tooltips float prominently -->
+      <g transform="translate(0, 0)">
+        <!-- Vertical Rail Column Background (w=48) -->
+        <rect width="48" height="400" fill="#07090f" fill-opacity="0.85" />
+        <line x1="48" y1="0" x2="48" y2="400" stroke="#161e2d" stroke-width="1" />
+
+        <!-- 1. Top Action Buttons Group (Revealed on left-edge hover) -->
+        <!-- Back Button (Esc) -->
+        <g transform="translate(13, 16)">
+          <circle cx="11" cy="11" r="11" fill="#161e2e" stroke="#334155" stroke-width="1" />
+          <path d="M 14 11 L 8 11 M 11 8 L 8 11 L 11 14" fill="none" stroke="#e2e8f0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </g>
+
+        <!-- PDF Export Button -->
+        <g transform="translate(13, 44)">
+          <circle cx="11" cy="11" r="11" fill="#161e2e" stroke="#334155" stroke-width="1" />
+          <path d="M 8 7 L 12 7 L 15 10 L 15 15 L 8 15 Z" fill="none" stroke="#e2e8f0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M 12 7 L 12 10 L 15 10" fill="none" stroke="#e2e8f0" stroke-width="1.2" stroke-linejoin="round"/>
+        </g>
+
+        <!-- HTML Export Button -->
+        <g transform="translate(13, 72)">
+          <circle cx="11" cy="11" r="11" fill="#161e2e" stroke="#334155" stroke-width="1" />
+          <path d="M 9.5 9 L 7.5 11 L 9.5 13 M 12.5 9 L 14.5 11 L 12.5 13" fill="none" stroke="#e2e8f0" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </g>
+
+        <!-- 2. Continuous Vertical Timeline Rail with Slide Dots -->
+        <g transform="translate(24, 114)">
+          <!-- Background Line Track -->
+          <line x1="0" y1="12" x2="0" y2="260" stroke="#334155" stroke-width="2" />
+
+          <!-- Slide 1 Dot -->
+          <circle cx="0" cy="24" r="4.5" fill="#334155" stroke="#64748b" stroke-width="2" />
+
+          <!-- Slide 2 Dot -->
+          <circle cx="0" cy="74" r="4.5" fill="#334155" stroke="#64748b" stroke-width="2" />
+
+          <!-- Slide 3 Dot (ACTIVE SLIDE!) - Enlarged Glowing Blue Pill -->
+          <g transform="translate(0, 126)">
+            <circle cx="0" cy="0" r="7.5" fill="#3b82f6" stroke="#60a5fa" stroke-width="2.5" filter="url(#activeDotGlow)" />
+            <circle cx="0" cy="0" r="3" fill="#ffffff" />
+          </g>
+
+          <!-- Slide 4 Dot -->
+          <circle cx="0" cy="180" r="4.5" fill="#334155" stroke="#64748b" stroke-width="2" />
+
+          <!-- Slide 5 Dot -->
+          <circle cx="0" cy="230" r="4.5" fill="#334155" stroke="#64748b" stroke-width="2" />
+        </g>
+      </g>
+    </g>
+    </g>
+
+    <!-- Gradient window border, drawn last and unclipped so all four rounded
+         corners keep the full stroke weight and the amber->cyan sweep -->
+    <rect x="0.75" y="0.75" width="602.5" height="438.5" rx="13.25"
+          fill="none" stroke="url(#windowBorder)" stroke-width="1.5" />
+  </g>
+
+</svg>
