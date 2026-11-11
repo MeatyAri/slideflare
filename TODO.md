@@ -1,6 +1,7 @@
 # TODO:
 
 - [ ] teach slideflare-slides skill the CLI: agent create → render → verify cycle
+- [ ] slideflare-slides skill too large; compress (caveman-compress or LLM pass)
 - [ ] image rendering per-platform; poppler is Linux-only, find portable solution
 - [ ] first-impression slides quality: integrate impeccable skill with system; let pro users pick own frontend skill
 - [ ] use a thumbnail as a place holder for videos in PDF exports
