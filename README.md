@@ -78,6 +78,7 @@ Open SlideFlare and **drag and drop** your `.md` file — or double-click a slid
 slideflare deck.md                          # open a deck
 slideflare export pdf  deck.md -o out.pdf   # render to PDF
 slideflare export html deck.md -o out.html  # render to a single self-contained HTML file
+slideflare export png  deck.md -o slides/   # one image per slide: slides/slide-01.png, ...
 slideflare validate deck.md                 # check it parses (no window)
 slideflare parse deck.md --json             # dump the parsed slides
 slideflare skill install                    # install/update the slideflare-slides skill
@@ -91,6 +92,11 @@ The exports are not: rendering a deck means running it. PDF export drives the pl
 own print pipeline against the live webview, and the HTML export captures the stylesheet
 Tailwind generates at runtime, so both open a window (parked offscreen) for the duration.
 On a headless Linux box, wrap it: `xvfb-run -a slideflare export pdf deck.md -o out.pdf`.
+
+PNG export is the PDF export, rasterized in-process — no poppler or other tool to install,
+same output on every platform. Images are 1280 px wide unless you pass `--width`, and the
+image paths are printed one per line. Exporting into the same directory again replaces the
+previous `slide-NN.png` files, so a deck that lost a slide never leaves a stale one behind.
 
 Exit codes, for scripting: `0` success, `1` failure, `2` bad arguments, `3` the deck did
 not parse, `4` the export timed out.

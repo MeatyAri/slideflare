@@ -1,6 +1,7 @@
-//! Deck export: self-contained HTML and PDF.
+//! Deck export: self-contained HTML, PDF, and PNG.
 //!
-//! The two exports take deliberately different routes.
+//! The first two take deliberately different routes; PNG is the PDF, rasterized
+//! (see [`png`]).
 //!
 //! **HTML** is built entirely in the frontend — only the frontend can read the
 //! live stylesheets that Tailwind's browser build generates for the dynamic
@@ -51,6 +52,8 @@ use crate::watcher::AppState;
     path = "export/pdf_unsupported.rs"
 )]
 mod pdf;
+
+pub mod png;
 
 /// Emitted once the PDF has been written. Payload is the output path.
 pub const EVENT_PDF_DONE: &str = "pdf-export-done";
@@ -136,7 +139,8 @@ pub(crate) fn emit_result(window: &tauri::WebviewWindow, result: Result<String, 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliExportRequest {
-    /// `"pdf"` or `"html"`.
+    /// `"pdf"` or `"html"`. A PNG export arrives here as `"pdf"`, aimed at a
+    /// scratch file the CLI rasterizes afterwards.
     pub kind: String,
     /// Absolute path to write.
     pub out_path: String,

@@ -44,11 +44,14 @@
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::sync::OnceLock;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use tauri::{LogicalPosition, LogicalSize, Manager, RunEvent};
 
-use super::{exit, fail, resolve_deck, resolve_output, ExportArgs};
+use super::{
+    exit, fail, resolve_deck, resolve_output, ExportArgs, ExportFormat, DEFAULT_PNG_WIDTH,
+};
 use crate::export::CliExportRequest;
 use crate::watcher::AppState;
 
@@ -163,6 +166,22 @@ const EXPORT_HEIGHT: f64 = 720.0;
 /// Set once the export outcome has been reported, so the watchdog stays quiet.
 static EXPORT_SETTLED: AtomicBool = AtomicBool::new(false);
 
+/// The second half of a PNG export, waiting for the first to finish.
+///
+/// Set by [`run_export`] before the app starts; read by [`finish_export`] once
+/// the frontend reports the scratch PDF written.
+static PNG_EXPORT: OnceLock<PngExport> = OnceLock::new();
+
+/// Where a PNG export's scratch PDF goes, and what to make of it.
+struct PngExport {
+    /// The PDF the frontend prints, deleted once rasterized or abandoned.
+    pdf: PathBuf,
+    /// Directory the `slide-NN.png` files are written into.
+    dir: PathBuf,
+    width: u32,
+    quiet: bool,
+}
+
 #[cfg(gtk_platform)]
 thread_local! {
     /// Holds the offscreen window the export webview is rendered into.
@@ -250,6 +269,7 @@ fn run_app(state: AppState, export_mode: bool) -> i32 {
     // one. Nothing but `finish_export` is allowed to report success.
     app.run(|_app, event| {
         if matches!(event, RunEvent::Exit) && !EXPORT_SETTLED.load(Ordering::SeqCst) {
+            discard_png_scratch();
             eprintln!("slideflare: the render window closed before the export finished");
             let _ = std::io::stderr().flush();
             std::process::exit(exit::FAILURE);
@@ -572,11 +592,19 @@ fn disable_occlusion_detection() -> bool {
     true
 }
 
-/// Render a deck to PDF or HTML and exit with the result.
+/// Render a deck to PDF, HTML or PNG and exit with the result.
 ///
 /// Returns only if the app could not be started at all; otherwise the process
 /// ends in [`finish_export`] or in the watchdog.
 pub fn run_export(args: ExportArgs, quiet: bool) -> i32 {
+    // Checked here rather than by clap, which cannot make one option depend on
+    // the value of a positional. Silently ignoring it would be worse: someone
+    // asking for a 1920-wide PDF would get a PDF and think the width applied.
+    if args.width.is_some() && args.format != ExportFormat::Png {
+        eprintln!("slideflare: --width only applies to `export png`");
+        return exit::USAGE;
+    }
+
     let deck = match resolve_deck(&args.deck, true) {
         Ok(deck) => deck,
         Err(message) => return fail(&message),
@@ -585,6 +613,15 @@ pub fn run_export(args: ExportArgs, quiet: bool) -> i32 {
         Ok(output) => output,
         Err(message) => return fail(&message),
     };
+
+    // Checked now, so a bad `-o` fails before the deck is rendered rather than
+    // after.
+    if args.format == ExportFormat::Png && output.is_file() {
+        return fail(&format!(
+            "{}: is a file; PNG export writes a directory of images",
+            output.display()
+        ));
+    }
 
     // Without `custom-protocol` the webview loads `devUrl` — the Vite dev server
     // — instead of the bundled frontend, so unless `bun run dev` happens to be
@@ -608,9 +645,24 @@ pub fn run_export(args: ExportArgs, quiet: bool) -> i32 {
         );
     }
 
+    // A PNG export is a PDF export to a scratch file; `finish_export` takes it
+    // from there.
+    let out_path = if args.format == ExportFormat::Png {
+        let pdf = scratch_pdf_path();
+        let _ = PNG_EXPORT.set(PngExport {
+            pdf: pdf.clone(),
+            dir: output,
+            width: args.width.unwrap_or(DEFAULT_PNG_WIDTH),
+            quiet,
+        });
+        pdf
+    } else {
+        output
+    };
+
     let request = CliExportRequest {
         kind: args.format.as_str().to_string(),
-        out_path: path_to_string(output),
+        out_path: path_to_string(out_path),
     };
 
     start_watchdog(args.timeout);
@@ -629,6 +681,45 @@ pub fn run_export(args: ExportArgs, quiet: bool) -> i32 {
 /// not flush Rust's own — which would lose the output path whenever stdout is a
 /// pipe rather than a terminal, i.e. exactly when a CI script is reading it.
 pub fn finish_export(ok: bool, message: Option<&str>) -> ! {
+    // A PNG export is only half done when the PDF is: rasterize it before
+    // settling, so the watchdog still covers this step. On success the message
+    // becomes the image paths, one per line, in place of the scratch PDF's.
+    let outcome;
+    let (ok, message) = match PNG_EXPORT.get() {
+        Some(job) if ok => {
+            let result = crate::export::png::rasterize(&job.pdf, &job.dir, job.width);
+            let _ = std::fs::remove_file(&job.pdf);
+            match result {
+                Ok(paths) => {
+                    if !job.quiet {
+                        eprintln!(
+                            "slideflare: wrote {} slides to {}",
+                            paths.len(),
+                            job.dir.display()
+                        );
+                    }
+                    outcome = paths
+                        .iter()
+                        .map(|path| path.display().to_string())
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    (true, Some(outcome.as_str()))
+                }
+                Err(error) => {
+                    outcome = error;
+                    (false, Some(outcome.as_str()))
+                }
+            }
+        }
+        // The print failed, so there is nothing to rasterize; its own message
+        // is the one worth reporting.
+        Some(job) => {
+            let _ = std::fs::remove_file(&job.pdf);
+            (ok, message)
+        }
+        None => (ok, message),
+    };
+
     EXPORT_SETTLED.store(true, Ordering::SeqCst);
 
     let code = if ok {
@@ -660,10 +751,31 @@ fn start_watchdog(seconds: u64) {
             return;
         }
 
+        discard_png_scratch();
         eprintln!("slideflare: export timed out after {seconds}s");
         let _ = std::io::stderr().flush();
         std::process::exit(exit::TIMEOUT);
     });
+}
+
+/// A fresh path in the temp directory for a PNG export's intermediate PDF.
+///
+/// Process id plus a timestamp, so two exports running at once never share one.
+fn scratch_pdf_path() -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_nanos());
+    std::env::temp_dir().join(format!(
+        "slideflare-export-{}-{nanos}.pdf",
+        std::process::id()
+    ))
+}
+
+/// Delete a PNG export's scratch PDF on the way out of a failed export.
+fn discard_png_scratch() {
+    if let Some(job) = PNG_EXPORT.get() {
+        let _ = std::fs::remove_file(&job.pdf);
+    }
 }
 
 /// Paths reach the frontend as strings; they are already absolute by here.

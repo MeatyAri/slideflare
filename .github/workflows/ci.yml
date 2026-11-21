@@ -197,6 +197,39 @@ jobs:
             target/release/slideflare export pdf ../examples/example.md -o out.pdf
           fi
 
+      # The PDF export again, rasterized in-process by hayro. It is the same
+      # render on every platform by design, so what this proves per runner is
+      # the plumbing: the scratch PDF hand-off, one image per slide, and the
+      # requested size exactly. The size is read from each PNG's IHDR chunk
+      # (bytes 16-23, big-endian) with `od`, which all three runners have.
+      - name: Export PNG
+        if: always()
+        working-directory: src-tauri
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.platform }}" in
+            ubuntu-22.04)   run() { xvfb-run -a target/release/slideflare "$@"; } ;;
+            windows-latest) run() { target/release/slideflare.exe "$@"; } ;;
+            *)              run() { target/release/slideflare "$@"; } ;;
+          esac
+
+          run export png ../examples/intro-to-slideflare.md -o out-png --width 960
+
+          slides=$(run validate ../examples/intro-to-slideflare.md | grep -oE '[0-9]+' | head -1)
+          images=$(ls out-png/slide-*.png | wc -l | tr -d ' ')
+          echo "slides=$slides images=$images"
+          [ "$slides" = "$images" ] \
+            || { echo "::error::$images images for $slides slides"; exit 1; }
+
+          for f in out-png/slide-*.png; do
+            read -r w0 w1 w2 w3 h0 h1 h2 h3 < <(od -An -tu1 -j16 -N8 "$f")
+            w=$(( (w0 << 24) | (w1 << 16) | (w2 << 8) | w3 ))
+            h=$(( (h0 << 24) | (h1 << 16) | (h2 << 8) | h3 ))
+            [ "$w" = 960 ] && [ "$h" = 540 ] \
+              || { echo "::error::$f is ${w}x${h}, expected 960x540"; exit 1; }
+          done
+
       # Tier 3, assertion 1, on every platform. A file that exists but is blank
       # is the dangerous failure mode, so size alone is not sufficient — but it
       # is the only check that is trivial on all three runners.

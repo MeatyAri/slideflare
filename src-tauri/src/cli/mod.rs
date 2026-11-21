@@ -49,6 +49,13 @@ pub mod exit {
 /// watchdog and the frontend's own give up at the same point rather than racing.
 pub const DEFAULT_TIMEOUT_SECS: u64 = 120;
 
+/// Default width of a PNG export, in pixels.
+///
+/// The deck's design resolution (`DESIGN_W` in
+/// `src/routes/view-slides/shared.svelte.ts`), so one image pixel is one CSS
+/// pixel and a 16:9 slide comes out at 1280x720.
+pub const DEFAULT_PNG_WIDTH: u32 = 1280;
+
 #[derive(Debug, Parser)]
 #[command(
     name = "slideflare",
@@ -83,7 +90,7 @@ pub enum Command {
         deck: PathBuf,
     },
 
-    /// Render a deck to PDF or a self-contained HTML file.
+    /// Render a deck to PDF, a self-contained HTML file, or one PNG per slide.
     Export(ExportArgs),
 
     /// Check that a deck parses, without rendering it.
@@ -134,9 +141,22 @@ pub struct ExportArgs {
     #[arg(value_name = "DECK")]
     pub deck: PathBuf,
 
-    /// File to write.
-    #[arg(short, long, value_name = "FILE")]
+    /// File to write. For `png`, the directory to write `slide-NN.png` into.
+    ///
+    /// A PNG export replaces any `slide-NN.png` already in that directory, so a
+    /// deck that lost a slide does not leave its old last slide behind. Nothing
+    /// else there is touched.
+    #[arg(short, long, value_name = "PATH")]
     pub output: PathBuf,
+
+    /// Image width in pixels, for `png` only. Height follows the slide's aspect
+    /// ratio. [default: 1280]
+    #[arg(
+        long,
+        value_name = "PX",
+        value_parser = clap::value_parser!(u32).range(1..=crate::export::png::MAX_WIDTH as i64)
+    )]
+    pub width: Option<u32>,
 
     /// Seconds to wait for the export to complete before giving up.
     #[arg(long, value_name = "SECS", default_value_t = DEFAULT_TIMEOUT_SECS)]
@@ -148,13 +168,17 @@ pub struct ExportArgs {
 pub enum ExportFormat {
     Pdf,
     Html,
+    Png,
 }
 
 impl ExportFormat {
     /// Wire name handed to the frontend, which picks an exporter from it.
+    ///
+    /// PNG has no exporter of its own in the frontend: it is a PDF export to a
+    /// scratch file, rasterized in Rust once the frontend reports it written.
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Pdf => "pdf",
+            Self::Pdf | Self::Png => "pdf",
             Self::Html => "html",
         }
     }
@@ -375,6 +399,53 @@ mod tests {
                 assert_eq!(args.timeout, 5);
             }
             other => panic!("expected an export command, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn export_png_takes_a_directory_and_an_optional_width() {
+        let cli = parse_args(&["slideflare", "export", "png", "deck.md", "-o", "shots"]);
+        match cli.command {
+            Some(Command::Export(args)) => {
+                assert_eq!(args.format, ExportFormat::Png);
+                assert_eq!(args.output, PathBuf::from("shots"));
+                assert_eq!(args.width, None);
+                // The frontend only knows how to print; Rust rasterizes.
+                assert_eq!(args.format.as_str(), "pdf");
+            }
+            other => panic!("expected an export command, got {other:?}"),
+        }
+
+        let cli = parse_args(&[
+            "slideflare",
+            "export",
+            "png",
+            "deck.md",
+            "-o",
+            "shots",
+            "--width",
+            "1920",
+        ]);
+        match cli.command {
+            Some(Command::Export(args)) => assert_eq!(args.width, Some(1920)),
+            other => panic!("expected an export command, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn export_rejects_a_width_out_of_range() {
+        for width in ["0", "8193", "-5", "wide"] {
+            let args = [
+                "slideflare",
+                "export",
+                "png",
+                "d.md",
+                "-o",
+                "o",
+                "--width",
+                width,
+            ];
+            assert!(try_parse_args(&args).is_err(), "--width {width}");
         }
     }
 

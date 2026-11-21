@@ -147,6 +147,12 @@ deck signals `deck-ready` from `waitForDeckReady` in
 `exportPdf`/`exportHtml` the NavBar buttons call, with a path instead of a save
 dialog. See `docs/testing-platform-exports.md` for why.
 
+`export png` adds no frontend path: the frontend sees a plain PDF export to a
+scratch file, and `cli::gui::finish_export` rasterizes it with hayro
+(`src-tauri/src/export/png.rs`, pure Rust, pinned `=0.9.0`) before exiting.
+Keep it that way — the images then show exactly what the PDF shows, and the
+only platform code involved is the print path CI already gates.
+
 ## Versioning
 
 `package.json` is the single source of truth for the app version; `tauri.conf.json`, the frontend, and `Cargo.toml` all derive from it. Never edit versions in more than one place.

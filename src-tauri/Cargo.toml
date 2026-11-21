@@ -49,6 +49,10 @@ dirs = "6"
 which = "7"
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
+# Rasterizes the exported PDF for `slideflare export png` (see `export::png`).
+# Pure Rust, so there is no native library to ship per platform. Pinned exactly:
+# its API still changes between minor releases.
+hayro = "=0.9.0"
 
 # Platform webview handles, used only by the native PDF export in `export::pdf_*`.
 # Versions are pinned to whatever wry/tauri already resolve to so cargo unifies
