@@ -1,8 +1,6 @@
 # TODO:
 
-- [x] image rendering per-platform; poppler is Linux-only, find portable solution
-  - `slideflare export png`: PDF export rasterized in-process with hayro (pure Rust)
-- [ ] first-impression slides quality: integrate impeccable skill with system; let pro users pick own frontend skill
+- [ ] first-impression slides quality: slides use the user's chosen frontend skill; if none installed, default to Impeccable
 - [ ] use a thumbnail as a place holder for videos in PDF exports
 - [ ] add better default styling
   - [ ] to heading tags
@@ -30,9 +28,12 @@
 - [ ] Do not open links inside the app, open them in the browser, (ask for confirmation before opening the link)
 
 # Testing:
+- [ ] skill/app version skew: separate repos, so the latest skill can run against an older app and reference features it lacks. Add version gating or a minimum-app-version check
 
 - [x] teach slideflare-slides skill the CLI: agent create → render → verify cycle
 - [x] slideflare-slides skill too large; compress (caveman-compress or LLM pass)
+- [x] image rendering per-platform; poppler is Linux-only, find portable solution
+  - `slideflare export png`: PDF export rasterized in-process with hayro (pure Rust)
 - [x] centralize the versioning so you don't have to change 10 different numbers manually
   - [x] also add some github actions to update the AUR versions
 - [x] a convenience option to install/update the slideflare skill after an update to the app or on first launch (maybe inside the tutorial section where we introduce it)
