@@ -1,7 +1,5 @@
 # TODO:
 
-- [ ] teach slideflare-slides skill the CLI: agent create → render → verify cycle
-- [ ] slideflare-slides skill too large; compress (caveman-compress or LLM pass)
 - [x] image rendering per-platform; poppler is Linux-only, find portable solution
   - `slideflare export png`: PDF export rasterized in-process with hayro (pure Rust)
 - [ ] first-impression slides quality: integrate impeccable skill with system; let pro users pick own frontend skill
@@ -33,6 +31,8 @@
 
 # Testing:
 
+- [x] teach slideflare-slides skill the CLI: agent create → render → verify cycle
+- [x] slideflare-slides skill too large; compress (caveman-compress or LLM pass)
 - [x] centralize the versioning so you don't have to change 10 different numbers manually
   - [x] also add some github actions to update the AUR versions
 - [x] a convenience option to install/update the slideflare skill after an update to the app or on first launch (maybe inside the tutorial section where we introduce it)
